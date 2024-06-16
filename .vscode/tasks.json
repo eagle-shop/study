@@ -1,0 +1,39 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "cmake",
+            "type": "shell",
+            "command": [
+                "cmake"
+            ],
+            "args": [
+                "-DCMAKE_BUILD_TYPE=Debug",
+                "-B",
+                "build",
+                ".",
+                "-G",
+                "Ninja",
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "build",
+            "type": "shell",
+            "command": [
+                "cmake"
+            ],
+            "args": [
+                "--build",
+                "build",
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+    ]
+}

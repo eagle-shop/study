@@ -1,0 +1,16 @@
+{
+    "files.associations": {
+        "unordered_map": "cpp",
+        "future": "cpp",
+        "memory": "cpp",
+        "optional": "cpp",
+        "thread": "cpp",
+        "exception": "cpp",
+        "filesystem": "cpp",
+        "iostream": "cpp",
+        "stdexcept": "cpp",
+        "string": "cpp",
+        "compare": "cpp",
+        "cstdint": "cpp"
+    }
+}
