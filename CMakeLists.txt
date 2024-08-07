@@ -8,3 +8,4 @@ set(CMAKE_CXX_FLAGS "-Werror")
 find_package(CapnProto CONFIG REQUIRED)
 
 add_subdirectory(capnproto)
+add_subdirectory(libarchive)

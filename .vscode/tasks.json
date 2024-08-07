@@ -35,5 +35,103 @@
             },
             "problemMatcher": []
         },
+        {
+            "label": "exec study_libarchive (tar)",
+            "type": "shell",
+            "command": [
+                "./libarchive/study_libarchive"
+            ],
+            "args": [
+                "50",
+                "./study_libarchive_tar_test",
+                "../libarchive/test_data/data.tar_00",
+                "../libarchive/test_data/data.tar_01",
+                "../libarchive/test_data/data.tar_02",
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/build"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "exec study_libarchive (7z)",
+            "type": "shell",
+            "command": [
+                "./libarchive/study_libarchive"
+            ],
+            "args": [
+                "50",
+                "./study_libarchive_7z_test",
+                "../libarchive/test_data/data.7z",
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/build"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "prepare study_libarchive",
+            "type": "shell",
+            "command": [
+                "rm"
+            ],
+            "args": [
+                "-r",
+                "./study_libarchive_tar_test",
+                "./study_libarchive_7z_test",
+                "||",
+                "true",
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/build"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "checksum study_libarchive (tar)",
+            "type": "shell",
+            "command": [
+                "sha512sum"
+            ],
+            "args": [
+                "-c",
+                "../../libarchive/test_data/sha512sum.txt",
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/build/study_libarchive_tar_test"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "checksum study_libarchive (7z)",
+            "type": "shell",
+            "command": [
+                "sha512sum"
+            ],
+            "args": [
+                "-c",
+                "../../libarchive/test_data/sha512sum.txt",
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/build/study_libarchive_7z_test"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "testing study_libarchive",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "prepare study_libarchive",
+                "exec study_libarchive (tar)",
+                "exec study_libarchive (7z)",
+                "checksum study_libarchive (tar)",
+                "checksum study_libarchive (7z)",
+            ],
+            "problemMatcher": []
+        },
     ]
 }
