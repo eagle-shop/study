@@ -9,3 +9,4 @@ find_package(CapnProto CONFIG REQUIRED)
 
 add_subdirectory(capnproto)
 add_subdirectory(libarchive)
+add_subdirectory(opencryptoki)
