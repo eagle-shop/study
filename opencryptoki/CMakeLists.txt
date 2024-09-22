@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
-project(study_opencryptoki CXX)
+project(StudyOpencryptoki CXX)
 
-add_executable(study_opencryptoki main.cpp)
+add_library(StudyOpencryptoki study_opencryptoki.cpp)
 
-target_include_directories(study_opencryptoki
+target_include_directories(StudyOpencryptoki
   PRIVATE
 )
 
-target_link_libraries(study_opencryptoki
+target_link_libraries(StudyOpencryptoki
   PRIVATE
     opencryptoki
     pthread
