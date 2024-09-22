@@ -62,6 +62,11 @@
         "cinttypes": "cpp",
         "typeinfo": "cpp",
         "list": "cpp",
-        "bitset": "cpp"
+        "bitset": "cpp",
+        "any": "cpp",
+        "map": "cpp",
+        "set": "cpp",
+        "span": "cpp",
+        "variant": "cpp"
     }
 }
