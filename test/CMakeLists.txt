@@ -13,6 +13,18 @@ target_include_directories(Test
     ${CMAKE_SOURCE_DIR}/sqlite3
 )
 
+target_compile_features(Test
+  PUBLIC
+    cxx_std_20
+)
+
+target_compile_options(Test
+  PUBLIC
+    -Wall
+    -Wextra
+    -Werror
+)
+
 target_link_libraries(Test
   PRIVATE
     StudyOpencryptoki

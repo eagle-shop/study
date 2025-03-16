@@ -1,15 +1,15 @@
+// Copyright (c) 2024 eagle-shop
+
+#include "log.h"
 #include "server.h"
 
 void clientMain();
 
 int main() {
-  auto startServer = StudyServer::start();
-  startServer.wait();
-
-  clientMain();
-
-  auto endServer = StudyServer::end();
-  endServer.wait();
-
+  {
+    StudyServer studyServer;
+    clientMain();
+  }
+  Log::print("[main]end");
   return 0;
 }

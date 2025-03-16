@@ -156,6 +156,7 @@ int main(int argc, char *argv[]) {
   }
 
   static auto fileOpenCallback = [](struct archive *archiveRead, void *clientData) {
+    (void)archiveRead;
     if (clientData == nullptr) {
       std::cerr << "fileOpenCallback clientData nullptr" << std::endl;
       return ARCHIVE_FATAL;
@@ -165,6 +166,7 @@ int main(int argc, char *argv[]) {
   };
 
   static auto fileReadCallback = [](struct archive *archiveRead, void *clientData, const void **buffer) {
+    (void)archiveRead;
     if (clientData == nullptr) {
       std::cerr << "fileReadCallback clientData nullptr" << std::endl;
       return la_ssize_t(0);
@@ -174,6 +176,7 @@ int main(int argc, char *argv[]) {
   };
 
   static auto fileSkipCallback = [](struct archive *archiveRead, void *clientData, la_int64_t request) {
+    (void)archiveRead;
     if (clientData == nullptr) {
       std::cerr << "fileSkipCallback clientData nullptr" << std::endl;
       return la_int64_t(-1);
@@ -203,6 +206,7 @@ int main(int argc, char *argv[]) {
   };
 
   static auto fileSeekCallback = [](struct archive *archiveRead, void *clientData, la_int64_t offset, int whence) {
+    (void)archiveRead;
     if (clientData == nullptr) {
       std::cerr << "fileSeekCallback clientData nullptr" << std::endl;
       return la_int64_t(ARCHIVE_FATAL);

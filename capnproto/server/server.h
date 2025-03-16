@@ -1,13 +1,14 @@
-#ifndef _STUDY_CAPNPROTO_SERVER_
-#define _STUDY_CAPNPROTO_SERVER_
+// Copyright (c) 2024 eagle-shop
+
+#ifndef CAPNPROTO_SERVER_SERVER_H_
+#define CAPNPROTO_SERVER_SERVER_H_
 
 #include <capnp/ez-rpc.h>
 #include <kj/async-io.h>
 #include <kj/async.h>
 
-#include <future>
+#include <list>
 #include <memory>
-#include <optional>
 #include <thread>
 #include <unordered_map>
 
@@ -15,69 +16,78 @@
 
 class StudyServer final {
  public:
-  static std::future<void> start();
-  static std::future<void> end();
+  StudyServer();
+  ~StudyServer();
+
+  StudyServer(const StudyServer &)            = delete;
+  StudyServer(StudyServer &&)                 = delete;
+  StudyServer &operator=(const StudyServer &) = delete;
+  StudyServer &operator=(StudyServer &&)      = delete;
 
  private:
   class Server;
-  class Interface final {
+  class EzRpcServerInterface final {
    public:
-    Interface();
-    ~Interface() = default;
+    EzRpcServerInterface();
+    ~EzRpcServerInterface() = default;
 
-    Interface(const Interface &)            = delete;
-    Interface(Interface &&)                 = delete;
-    Interface &operator=(const Interface &) = delete;
-    Interface &operator=(Interface &&)      = delete;
+    EzRpcServerInterface(const EzRpcServerInterface &)            = delete;
+    EzRpcServerInterface(EzRpcServerInterface &&)                 = delete;
+    EzRpcServerInterface &operator=(const EzRpcServerInterface &) = delete;
+    EzRpcServerInterface &operator=(EzRpcServerInterface &&)      = delete;
 
-    void setEzRpcServer(capnp::EzRpcServer *ezRpcServer);
+    void initialize(const std::weak_ptr<capnp::EzRpcServer> &ezRpcServer);
+
     void setStudyServer(StudyServer::Server *studyServer);
     kj::WaitScope &getWaitScope();
     kj::AsyncIoProvider &getIoProvider();
     void clearTasks();
 
    private:
-    capnp::EzRpcServer *mEzRpcServer;
+    std::weak_ptr<capnp::EzRpcServer> mEzRpcServer;
     StudyServer::Server *mStudyServer;
   };
 
-  class Client final : public Study::Stream::Server {
+  class Client final : public Stream::Server {
    public:
-    enum class ApiId { subscribeXXX, none };
-
-    explicit Client(ApiId apiId, std::size_t clientId, StudyServer::Server &studyServer);
-    ~Client();
+    explicit Client(std::size_t clientId, StudyServer::Server &studyServer);
+    virtual ~Client();
 
    private:
-    ApiId mApiId;
-    std::size_t mClientId;
+    const std::size_t mClientId;
     StudyServer::Server &mStudyServer;
   };
 
-  class Server final : public Study::Server, kj::TaskSet::ErrorHandler {
+  class Server final : public Study::Server, public kj::TaskSet::ErrorHandler {
    public:
-    static std::future<void> startServer();
+    explicit Server(const std::weak_ptr<EzRpcServerInterface> &ezRpcServerInterface);
+    virtual ~Server();
 
-    explicit Server(Interface &interface);
-    void disconnection(Client::ApiId apiId, std::size_t clientId);
+    void disconnection(std::size_t clientId);
     void clearTasks();
 
    private:
-    kj::Promise<void> fetchXXX(FetchXXXContext context) final;
-    kj::Promise<void> subscribeXXX(SubscribeXXXContext context) final;
+    kj::Promise<void> fetch(FetchContext context) final;
+    kj::Promise<void> subscribeX(SubscribeXContext context) final;
+    kj::Promise<void> subscribeY(SubscribeYContext context) final;
     void taskFailed(kj::Exception &&e) final;
 
-    kj::Promise<void> subscribeXXXFunc();
+    kj::Promise<void> subscribeXFunc();
 
-    Interface &mInterface;
+    const std::weak_ptr<EzRpcServerInterface> mInterface;
     kj::TaskSet mTaskSet;
-    std::unordered_map<Client::ApiId, std::unordered_map<std::size_t, std::unique_ptr<Study::Callback::Client>>>
-        mClient;
+    kj::Own<const kj::Executor> mExecutor;
+    std::list<std::thread> mThreads;
+    std::size_t mClientCounter;
+    std::unordered_map<std::size_t, std::unique_ptr<Study::Callback<capnp::Text>::Client>> mClientX;
+    std::unordered_map<std::size_t,
+                       std::unique_ptr<Study::Callback<::Study::Result<::capnp::Text, ::Study::ErrorMessage>>::Client>>
+        mClientY;
   };
 
-  static std::optional<std::thread> mThread;
-  static std::optional<kj::PromiseFulfillerPair<void>> mPromiseFulfillerPair;
-  static const kj::Executor *mExecutor;
+  std::thread mMainThread;
+  std::shared_ptr<kj::PromiseFulfillerPair<void>> mPromiseFulfillerPair;
+  kj::Own<const kj::Executor> mExecutor;
 };
 
-#endif  // _STUDY_CAPNPROTO_SERVER_
+#endif  // CAPNPROTO_SERVER_SERVER_H_

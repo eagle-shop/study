@@ -68,5 +68,12 @@
         "set": "cpp",
         "span": "cpp",
         "variant": "cpp"
-    }
+    },
+    "cpplint.filters": [
+        "-build/include_subdir",
+        "-build/c++17",
+        "-whitespace/parens",
+        "-runtime/references"
+    ],
+    "cpplint.lineLength": 120
 }

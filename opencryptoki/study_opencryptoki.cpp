@@ -67,7 +67,7 @@ StudyOpencryptoki::StudyOpencryptoki() : mFunctionList(nullptr), mSessionHandle(
   }
 
   CK_SLOT_ID availableSlot = 0xFFFFFFFF;
-  for (auto i = 0; i < slotSize; i++) {
+  for (CK_ULONG i = 0; i < slotSize; i++) {
     CK_SLOT_INFO slotInfo = {};
     ret                   = mFunctionList->C_GetSlotInfo(i, &slotInfo);
     if (ret == CKR_OK) {

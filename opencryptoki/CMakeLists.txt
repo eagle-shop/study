@@ -12,3 +12,15 @@ target_link_libraries(StudyOpencryptoki
     opencryptoki
     pthread
 )
+
+target_compile_features(StudyOpencryptoki
+  PUBLIC
+    cxx_std_20
+)
+
+target_compile_options(StudyOpencryptoki
+  PUBLIC
+    -Wall
+    -Wextra
+    -Werror
+)
