@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <future>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 
@@ -164,9 +165,51 @@ void StudyServer::Server::clearTasks() {
   }
 }
 
-kj::Promise<void> StudyServer::Server::fetch(FetchContext context) {
-  context.getResults().initResult().setValue("fetch OK");
-  return kj::READY_NOW;
+kj::Promise<void> StudyServer::Server::createUserId(CreateUserIdContext context) {
+  Log::print("[server]createUserId start");
+
+  return executeAsync(
+      [this]() {
+        std::lock_guard<std::mutex> lock(mMutex);
+        auto ret = mUserDataList.emplace(mUserDataList.size(), UserData{});
+        return ret.second ? std::optional<uint64_t>(mUserDataList.size() - 1) : std::nullopt;
+      },
+      [context = kj::mv(context)](std::optional<std::optional<uint64_t>> &&result) mutable {
+        if (result && result.value()) {
+          context.getResults().initResult().initValue().setId(result.value().value());
+          Log::print("[server]createUserId end. id: " + std::to_string(result.value().value()));
+        } else {
+          context.getResults().initResult().initError().setMessage("createUserId failed");
+        }
+      });
+}
+
+kj::Promise<void> StudyServer::Server::deleteUserId(DeleteUserIdContext context) {
+  if (!context.getParams().hasUserId()) {
+    context.getResults().initResult().initError().setMessage("deleteUserId id is null");
+    return kj::READY_NOW;
+  }
+
+  Log::print("[server]deleteUserId start. id: " + std::to_string(context.getParams().getUserId().getId()));
+
+  return executeAsync(
+      [this, id = context.getParams().getUserId().getId()]() {
+        std::lock_guard<std::mutex> lock(mMutex);
+        if (mUserDataList.contains(id)) {
+          mUserDataList.erase(id);
+          return true;
+        } else {
+          return false;
+        }
+      },
+      [context = kj::mv(context)](std::optional<bool> &&result) mutable {
+        if (result && result.value()) {
+          context.getResults().initResult().initValue();
+        } else {
+          context.getResults().initResult().initError().setMessage("deleteUserId invalid id");
+        }
+        Log::print("[server]deleteUserId end");
+      });
 }
 
 kj::Promise<void> StudyServer::Server::subscribeX(SubscribeXContext context) {
@@ -175,7 +218,7 @@ kj::Promise<void> StudyServer::Server::subscribeX(SubscribeXContext context) {
     return kj::READY_NOW;
   }
 
-  auto callback = std::make_unique<Study::Callback<capnp::Text>::Client>(context.getParams().getCallback());
+  auto callback = std::make_unique<Callback<capnp::Text>::Client>(context.getParams().getCallback());
   if (!callback) {
     context.getResults().initResult().initError().setMessage("could not hold callback object");
     return kj::READY_NOW;
@@ -205,8 +248,7 @@ kj::Promise<void> StudyServer::Server::subscribeY(SubscribeYContext context) {
     return kj::READY_NOW;
   }
 
-  auto callback = std::make_unique<Study::Callback<::Study::Result<::capnp::Text, ::Study::ErrorMessage>>::Client>(
-      context.getParams().getCallback());
+  auto callback = std::make_unique<Callback<Result<capnp::Text, Ng>>::Client>(context.getParams().getCallback());
   if (!callback) {
     context.getResults().initResult().initError().setMessage("could not hold callback object");
     return kj::READY_NOW;
@@ -273,6 +315,28 @@ kj::Promise<void> StudyServer::Server::subscribeY(SubscribeYContext context) {
 
 void StudyServer::Server::taskFailed(kj::Exception &&e) {
   Log::print(std::string("[server]taskFailed: ") + e.getDescription().cStr());
+}
+
+template <typename F1, typename F2>
+kj::Promise<void> StudyServer::Server::executeAsync(F1 &&func1, F2 &&func2) {
+  using T = decltype(func1());
+  auto promiseAndCrossThreadFulfiller =
+      std::make_shared<kj::PromiseCrossThreadFulfillerPair<T>>(kj::newPromiseAndCrossThreadFulfiller<T>());
+  if (promiseAndCrossThreadFulfiller) {
+    std::thread thread([func = std::forward<F1>(func1), promiseAndCrossThreadFulfiller]() {
+      if (promiseAndCrossThreadFulfiller && promiseAndCrossThreadFulfiller->fulfiller) {
+        promiseAndCrossThreadFulfiller->fulfiller->fulfill(func());
+      }
+    });
+    return promiseAndCrossThreadFulfiller->promise.then(
+        [func = std::forward<F2>(func2), thread = std::move(thread)](T &&result) mutable {
+          func(std::forward<T>(result));
+          thread.join();
+        });
+  } else {
+    func2(std::nullopt);
+    return kj::NEVER_DONE;
+  }
 }
 
 kj::Promise<void> StudyServer::Server::subscribeXFunc() {

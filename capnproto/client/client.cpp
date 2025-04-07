@@ -8,7 +8,7 @@
 #include "log.h"
 #include "study.capnp.h"
 
-class CallbackX final : public Study::Callback<capnp::Text>::Server {
+class CallbackX final : public Callback<capnp::Text>::Server {
  public:
   explicit CallbackX(kj::Own<kj::PromiseFulfiller<void>> promiseFulfiller, uint64_t end = 3)
       : mPromiseFulfiller(kj::mv(promiseFulfiller)), mInitialValue(end), mCounter(end) {}
@@ -34,7 +34,7 @@ class CallbackX final : public Study::Callback<capnp::Text>::Server {
   uint64_t mCounter;
 };
 
-class CallbackY final : public Study::Callback<::Study::Result<::capnp::Text, ::Study::ErrorMessage>>::Server {
+class CallbackY final : public Callback<Result<capnp::Text, Ng>>::Server {
  public:
   explicit CallbackY(kj::Own<kj::PromiseFulfiller<void>> promiseFulfiller, uint64_t end = 3)
       : mPromiseFulfiller(kj::mv(promiseFulfiller)), mInitialValue(end), mCounter(end) {}
@@ -68,9 +68,14 @@ void clientMain() {
   capnp::EzRpcClient client(unixSock.c_str());
   auto study = client.getMain<Study>();
 
-  auto fetch       = study.fetchRequest();
-  auto fetchResult = fetch.send().wait(client.getWaitScope());
-  Log::print(std::string("[client]fetchResult: ") + fetchResult.toString().flatten().cStr());
+  auto createUserId1        = study.createUserIdRequest();
+  auto createUserIdPromise1 = createUserId1.send();
+  auto createUserId2        = study.createUserIdRequest();
+  auto createUserIdPromise2 = createUserId2.send();
+  auto createUserIdResult1  = createUserIdPromise1.wait(client.getWaitScope());
+  auto createUserIdResult2  = createUserIdPromise2.wait(client.getWaitScope());
+  Log::print(std::string("[client]createUserIdResult1: ") + createUserIdResult1.toString().flatten().cStr());
+  Log::print(std::string("[client]createUserIdResult2: ") + createUserIdResult2.toString().flatten().cStr());
 
   auto promiseAndFulfiller = kj::newPromiseAndFulfiller<void>();
   auto subscribeX          = study.subscribeXRequest();
@@ -96,6 +101,19 @@ void clientMain() {
   auto setCallbackResultY = subscribeY.send().wait(client.getWaitScope());
   Log::print(std::string("[client]setCallbackResult: ") + setCallbackResultY.toString().flatten().cStr());
   promiseAndFulfiller.promise.wait(client.getWaitScope());
+
+  if (createUserIdResult1.hasResult() && createUserIdResult1.getResult().hasValue()) {
+    auto deleteUserId = study.deleteUserIdRequest();
+    deleteUserId.initUserId().setId(createUserIdResult1.getResult().getValue().getId());
+    auto deleteUserIdResult = deleteUserId.send().wait(client.getWaitScope());
+    Log::print(std::string("[client]deleteUserIdResult: ") + deleteUserIdResult.toString().flatten().cStr());
+  }
+  if (createUserIdResult2.hasResult() && createUserIdResult2.getResult().hasValue()) {
+    auto deleteUserId = study.deleteUserIdRequest();
+    deleteUserId.initUserId().setId(createUserIdResult2.getResult().getValue().getId());
+    auto deleteUserIdResult = deleteUserId.send().wait(client.getWaitScope());
+    Log::print(std::string("[client]deleteUserIdResult: ") + deleteUserIdResult.toString().flatten().cStr());
+  }
 
   Log::print("[client]end");
 }

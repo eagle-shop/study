@@ -9,6 +9,7 @@
 
 #include <list>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <unordered_map>
 
@@ -67,22 +68,27 @@ class StudyServer final {
     void clearTasks();
 
    private:
-    kj::Promise<void> fetch(FetchContext context) final;
+    kj::Promise<void> createUserId(CreateUserIdContext context) final;
+    kj::Promise<void> deleteUserId(DeleteUserIdContext context) final;
     kj::Promise<void> subscribeX(SubscribeXContext context) final;
     kj::Promise<void> subscribeY(SubscribeYContext context) final;
     void taskFailed(kj::Exception &&e) final;
 
+    template <typename F1, typename F2>
+    kj::Promise<void> executeAsync(F1 &&func1, F2 &&func2);
     kj::Promise<void> subscribeXFunc();
+
+    struct UserData {};
 
     const std::weak_ptr<EzRpcServerInterface> mInterface;
     kj::TaskSet mTaskSet;
     kj::Own<const kj::Executor> mExecutor;
     std::list<std::thread> mThreads;
-    std::size_t mClientCounter;
-    std::unordered_map<std::size_t, std::unique_ptr<Study::Callback<capnp::Text>::Client>> mClientX;
-    std::unordered_map<std::size_t,
-                       std::unique_ptr<Study::Callback<::Study::Result<::capnp::Text, ::Study::ErrorMessage>>::Client>>
-        mClientY;
+    std::unordered_map<uint64_t, UserData> mUserDataList;
+    uint64_t mClientCounter;
+    std::unordered_map<std::size_t, std::unique_ptr<Callback<capnp::Text>::Client>> mClientX;
+    std::unordered_map<std::size_t, std::unique_ptr<Callback<Result<capnp::Text, Ng>>::Client>> mClientY;
+    std::mutex mMutex;
   };
 
   std::thread mMainThread;

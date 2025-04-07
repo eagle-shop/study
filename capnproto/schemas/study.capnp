@@ -1,30 +1,20 @@
 @0xd1f41a741501db7a;
 
-using import "stream.capnp".Stream;
+using import "common.capnp".Stream;
+using import "common.capnp".Callback;
+using import "common.capnp".Ok;
+using import "common.capnp".Ng;
+using import "common.capnp".Result;
 
 interface Study {
   const sock: Text = "/tmp/capnp_study.sock";
 
-  fetch @0 () -> (result: Result(Text, ErrorMessage));
-  subscribeX @1 (settings: Settings, callback: Callback(Text)) -> (result: Result(Stream, ErrorMessage));
-  subscribeY @2 (callback: Callback(Result(Text, ErrorMessage))) -> (result: Result(Stream, ErrorMessage));
+  createUserId @0 () -> (result: Result(UserId, Ng));
+  deleteUserId @1 (userId: UserId) -> (result: Result(Ok, Ng));
+  subscribeX @2 (userId: UserId, callback: Callback(Text)) -> (result: Result(Stream, Ng));
+  subscribeY @3 (userId: UserId, callback: Callback(Result(Text, Ng))) -> (result: Result(Stream, Ng));
 
-  struct Settings {
-    dmy @0: Void;
-  }
-
-  interface Callback(Type) {
-    send @0 (value: Type) -> stream;
-  }
-
-  struct ErrorMessage {
-    message @0: Text;
-  }
-
-  struct Result(Value, Error) {
-    union {
-      value @0: Value;
-      error @1: Error;
-    }
+  struct UserId {
+    id @0: UInt64;
   }
 }
