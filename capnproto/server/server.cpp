@@ -12,6 +12,7 @@
 #include <string>
 #include <utility>
 
+#include "async_helper.h"
 #include "log.h"
 
 StudyServer::StudyServer() {
@@ -125,56 +126,42 @@ void StudyServer::EzRpcServerInterface::clearTasks() {
   mStudyServer->clearTasks();
 }
 
-StudyServer::Client::Client(std::size_t clientId, StudyServer::Server &studyServer)
-    : mClientId(clientId), mStudyServer(studyServer) {}
-
-StudyServer::Client::~Client() { mStudyServer.disconnection(mClientId); }
-
 StudyServer::Server::Server(const std::weak_ptr<EzRpcServerInterface> &ezRpcServerInterface)
-    : mInterface(ezRpcServerInterface), mTaskSet(*this), mClientCounter(0) {
+    : mInterface(ezRpcServerInterface),
+      mTaskSet(std::make_shared<kj::TaskSet>(*this)),
+      mPublisherX(es_util::cap::PublisherHelper<capnp::Text>::create(mTaskSet, "subscribeX")),
+      mPublisherY(es_util::cap::PublisherHelper<Result<capnp::Text, Ng>>::create(mTaskSet, "subscribeY")) {
   auto ins = mInterface.lock();
   if (!ins) {
     Log::printAndThrow("[server error]EzRpcServerInterface is null");
   }
 }
 
-StudyServer::Server::~Server() {
-  for (auto &e : mThreads) {
-    Log::print("[server]Server::~Server try to join");
-    e.join();
-  }
-  Log::print("[server]Server::~Server end");
-}
-
-void StudyServer::Server::disconnection(std::size_t clientId) {
-  Log::print("[server]disconnection(" + std::to_string(clientId) + ")");
-  if (mClientX.contains(clientId)) {
-    mClientX.erase(clientId);
-  } else if (mClientY.contains(clientId)) {
-    mClientY.erase(clientId);
-  }
-}
+StudyServer::Server::~Server() { Log::print("[server]Server::~Server end"); }
 
 void StudyServer::Server::clearTasks() {
-  mTaskSet.clear();
-  auto ins = mInterface.lock();
-  if (ins) {
-    Log::print("[server]StudyServer::Server::clearTasks wait");
-    mTaskSet.onEmpty().wait(ins->getWaitScope());
-    Log::print("[server]StudyServer::Server::clearTasks ok");
+  if (mTaskSet) {
+    mTaskSet->clear();
+
+    auto ins = mInterface.lock();
+    if (ins) {
+      Log::print("[server]StudyServer::Server::clearTasks wait");
+      mTaskSet->onEmpty().wait(ins->getWaitScope());
+      Log::print("[server]StudyServer::Server::clearTasks OK");
+    }
   }
 }
 
 kj::Promise<void> StudyServer::Server::createUserId(CreateUserIdContext context) {
   Log::print("[server]createUserId start");
 
-  return executeAsync(
+  return es_util::cap::AsyncHelper::executeAsync(
       [this]() {
         std::lock_guard<std::mutex> lock(mMutex);
         auto ret = mUserDataList.emplace(mUserDataList.size(), UserData{});
-        return ret.second ? std::optional<uint64_t>(mUserDataList.size() - 1) : std::nullopt;
+        return ret.second ? std::optional<UserId>(mUserDataList.size() - 1) : std::nullopt;
       },
-      [context = kj::mv(context)](std::optional<std::optional<uint64_t>> &&result) mutable {
+      [context = kj::mv(context)](std::optional<std::optional<UserId>> &&result) mutable {
         if (result && result.value()) {
           context.getResults().initResult().initValue().setId(result.value().value());
           Log::print("[server]createUserId end. id: " + std::to_string(result.value().value()));
@@ -192,7 +179,7 @@ kj::Promise<void> StudyServer::Server::deleteUserId(DeleteUserIdContext context)
 
   Log::print("[server]deleteUserId start. id: " + std::to_string(context.getParams().getUserId().getId()));
 
-  return executeAsync(
+  return es_util::cap::AsyncHelper::executeAsync(
       [this, id = context.getParams().getUserId().getId()]() {
         std::lock_guard<std::mutex> lock(mMutex);
         if (mUserDataList.contains(id)) {
@@ -224,21 +211,28 @@ kj::Promise<void> StudyServer::Server::subscribeX(SubscribeXContext context) {
     return kj::READY_NOW;
   }
 
-  auto client = kj::heap<Client>(mClientCounter, *this);
-  if (!client) {
-    context.getResults().initResult().initError().setMessage("could not create client object");
-    return kj::READY_NOW;
+  if (mPublisherX) {
+    auto client = mPublisherX->addSubscriber(std::move(callback));
+    if (!client) {
+      context.getResults().initResult().initError().setMessage("could not create client object");
+      return kj::READY_NOW;
+    }
+
+    if (!(*mPublisherX)) {
+      auto ret = mPublisherX->setWorker([this](std::stop_token stoken) {
+        while (!stoken.stop_requested()) {
+          mPublisherX->publish("send X");
+        }
+      });
+
+      if (!ret) {
+        context.getResults().initResult().initError().setMessage("could not create worker object");
+        return kj::READY_NOW;
+      }
+    }
+    context.getResults().initResult().setValue(kj::mv(client));
   }
-
-  context.getResults().initResult().setValue(kj::mv(client));
-  if (mClientX.empty()) {
-    mTaskSet.add(subscribeXFunc());
-  }
-  mClientX.emplace(mClientCounter, std::move(callback));
-
-  Log::print("[server]subscribeX registered. id: " + std::to_string(mClientCounter));
-  mClientCounter++;
-
+  Log::print("[server]subscribeX registered.");
   return kj::READY_NOW;
 }
 
@@ -254,113 +248,34 @@ kj::Promise<void> StudyServer::Server::subscribeY(SubscribeYContext context) {
     return kj::READY_NOW;
   }
 
-  auto client = kj::heap<Client>(mClientCounter, *this);
-  if (!client) {
-    context.getResults().initResult().initError().setMessage("could not create client object");
-    return kj::READY_NOW;
-  }
-
-  context.getResults().initResult().setValue(kj::mv(client));
-  if (mClientY.empty()) {
-    if (!mExecutor) {
-      mExecutor = kj::getCurrentThreadExecutor().addRef();
+  if (mPublisherY) {
+    auto client = mPublisherY->addSubscriber(std::move(callback));
+    if (!client) {
+      context.getResults().initResult().initError().setMessage("could not create client object");
+      return kj::READY_NOW;
     }
 
-    mThreads.push_back(std::thread([this]() {
-      while (true) {
-        if ((mExecutor) && mExecutor->isLive()) {
-          try {
-            Log::print("[server]subscribeY try to executeSync");
-            mExecutor->executeSync([this]() {
-              for (const auto &e : mClientY) {
-                if (e.second) {
-                  auto callback = e.second->sendRequest();
-                  callback.getValue().setValue("send Y");
-                  mTaskSet.add(callback.send()
-                                   .then([]() { Log::print("[server]subscribeY callback.send() OK"); },
-                                         [](kj::Exception &&e) {
-                                           Log::print(std::string("[server]subscribeY callback.send() Exception: ") +
-                                                      e.getDescription().cStr());
-                                         })
-                                   .attach(kj::mv(callback)));
-                }
-              }
-            });
-            Log::print("[server]subscribeY executeSync end");
-          } catch (kj::Exception &e) {
-            Log::print(std::string("[server]subscribeY kj::Exception: ") + e.getDescription().cStr());
-            return;
-          } catch (std::exception &e) {
-            Log::print(std::string("[server]subscribeY std::exception: ") + e.what());
-            return;
-          } catch (...) {
-            Log::print("[server]subscribeY unknown exception");
-            return;
-          }
-        } else {
-          Log::print("[server]subscribeY executor is null");
-          return;
+    if (!(*mPublisherY)) {
+      auto ret = mPublisherY->setWorker([this](std::stop_token stoken) {
+        while (!stoken.stop_requested()) {
+          capnp::MallocMessageBuilder resultMessageBuilder;
+          auto result = resultMessageBuilder.initRoot<Result<capnp::Text, Ng>>();
+          result.setValue("send Y");
+          mPublisherY->publish(kj::mv(result));
         }
-        Log::print("[server]subscribeY free lock");
+      });
+
+      if (!ret) {
+        context.getResults().initResult().initError().setMessage("could not create worker object");
+        return kj::READY_NOW;
       }
-    }));
+    }
+    context.getResults().initResult().setValue(kj::mv(client));
   }
-  mClientY.emplace(mClientCounter, std::move(callback));
-
-  Log::print("[server]subscribeY registered. id: " + std::to_string(mClientCounter));
-  mClientCounter++;
-
+  Log::print("[server]subscribeY registered.");
   return kj::READY_NOW;
 }
 
 void StudyServer::Server::taskFailed(kj::Exception &&e) {
   Log::print(std::string("[server]taskFailed: ") + e.getDescription().cStr());
-}
-
-template <typename F1, typename F2>
-kj::Promise<void> StudyServer::Server::executeAsync(F1 &&func1, F2 &&func2) {
-  using T = decltype(func1());
-  auto promiseAndCrossThreadFulfiller =
-      std::make_shared<kj::PromiseCrossThreadFulfillerPair<T>>(kj::newPromiseAndCrossThreadFulfiller<T>());
-  if (promiseAndCrossThreadFulfiller) {
-    std::thread thread([func = std::forward<F1>(func1), promiseAndCrossThreadFulfiller]() {
-      if (promiseAndCrossThreadFulfiller && promiseAndCrossThreadFulfiller->fulfiller) {
-        promiseAndCrossThreadFulfiller->fulfiller->fulfill(func());
-      }
-    });
-    return promiseAndCrossThreadFulfiller->promise.then(
-        [func = std::forward<F2>(func2), thread = std::move(thread)](T &&result) mutable {
-          func(std::forward<T>(result));
-          thread.join();
-        });
-  } else {
-    func2(std::nullopt);
-    return kj::NEVER_DONE;
-  }
-}
-
-kj::Promise<void> StudyServer::Server::subscribeXFunc() {
-  auto ins = mInterface.lock();
-  return ins ? (ins->getIoProvider().getTimer().afterDelay(1 * kj::SECONDS).then([this]() {
-    if (mClientX.empty()) {
-      return;
-    }
-
-    for (const auto &e : mClientX) {
-      if (e.second) {
-        Log::print("[server]subscribeXFunc send");
-        auto callback = e.second->sendRequest();
-        callback.setValue("send X");
-        mTaskSet.add(callback.send()
-                         .then([]() { Log::print("[server]subscribeX callback.send() OK"); },
-                               [](kj::Exception &&e) {
-                                 Log::print(std::string("[server]subscribeX callback.send() Exception: ") +
-                                            e.getDescription().cStr());
-                               })
-                         .attach(kj::mv(callback)));
-      }
-    }
-    mTaskSet.add(subscribeXFunc());
-  }))
-             : kj::READY_NOW;
 }

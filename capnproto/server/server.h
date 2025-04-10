@@ -7,12 +7,12 @@
 #include <kj/async-io.h>
 #include <kj/async.h>
 
-#include <list>
 #include <memory>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
 
+#include "publisher_helper.h"
 #include "study.capnp.h"
 
 class StudyServer final {
@@ -49,22 +49,11 @@ class StudyServer final {
     StudyServer::Server *mStudyServer;
   };
 
-  class Client final : public Stream::Server {
-   public:
-    explicit Client(std::size_t clientId, StudyServer::Server &studyServer);
-    virtual ~Client();
-
-   private:
-    const std::size_t mClientId;
-    StudyServer::Server &mStudyServer;
-  };
-
   class Server final : public Study::Server, public kj::TaskSet::ErrorHandler {
    public:
     explicit Server(const std::weak_ptr<EzRpcServerInterface> &ezRpcServerInterface);
     virtual ~Server();
 
-    void disconnection(std::size_t clientId);
     void clearTasks();
 
    private:
@@ -74,21 +63,17 @@ class StudyServer final {
     kj::Promise<void> subscribeY(SubscribeYContext context) final;
     void taskFailed(kj::Exception &&e) final;
 
-    template <typename F1, typename F2>
-    kj::Promise<void> executeAsync(F1 &&func1, F2 &&func2);
-    kj::Promise<void> subscribeXFunc();
+    using UserId = uint64_t;
 
     struct UserData {};
 
     const std::weak_ptr<EzRpcServerInterface> mInterface;
-    kj::TaskSet mTaskSet;
-    kj::Own<const kj::Executor> mExecutor;
-    std::list<std::thread> mThreads;
-    std::unordered_map<uint64_t, UserData> mUserDataList;
-    uint64_t mClientCounter;
+    const std::shared_ptr<kj::TaskSet> mTaskSet;
+    std::unordered_map<UserId, UserData> mUserDataList;
     std::unordered_map<std::size_t, std::unique_ptr<Callback<capnp::Text>::Client>> mClientX;
-    std::unordered_map<std::size_t, std::unique_ptr<Callback<Result<capnp::Text, Ng>>::Client>> mClientY;
     std::mutex mMutex;
+    const std::shared_ptr<es_util::cap::PublisherHelper<capnp::Text>> mPublisherX;
+    const std::shared_ptr<es_util::cap::PublisherHelper<Result<capnp::Text, Ng>>> mPublisherY;
   };
 
   std::thread mMainThread;
