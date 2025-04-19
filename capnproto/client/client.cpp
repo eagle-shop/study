@@ -8,7 +8,7 @@
 #include "log.h"
 #include "study.capnp.h"
 
-class CallbackX final : public Callback<capnp::Text>::Server {
+class CallbackX final : public EsUtil::Callback<capnp::Text>::Server {
  public:
   explicit CallbackX(kj::Own<kj::PromiseFulfiller<void>> promiseFulfiller, uint64_t end = 3)
       : mPromiseFulfiller(kj::mv(promiseFulfiller)), mInitialValue(end), mCounter(end) {}
@@ -34,7 +34,7 @@ class CallbackX final : public Callback<capnp::Text>::Server {
   uint64_t mCounter;
 };
 
-class CallbackY final : public Callback<Result<capnp::Text, Ng>>::Server {
+class CallbackY final : public EsUtil::Callback<Result<capnp::Text, Ng>>::Server {
  public:
   explicit CallbackY(kj::Own<kj::PromiseFulfiller<void>> promiseFulfiller, uint64_t end = 3)
       : mPromiseFulfiller(kj::mv(promiseFulfiller)), mInitialValue(end), mCounter(end) {}

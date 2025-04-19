@@ -205,7 +205,7 @@ kj::Promise<void> StudyServer::Server::subscribeX(SubscribeXContext context) {
     return kj::READY_NOW;
   }
 
-  auto callback = std::make_unique<Callback<capnp::Text>::Client>(context.getParams().getCallback());
+  auto callback = std::make_unique<EsUtil::Callback<capnp::Text>::Client>(context.getParams().getCallback());
   if (!callback) {
     context.getResults().initResult().initError().setMessage("could not hold callback object");
     return kj::READY_NOW;
@@ -242,7 +242,8 @@ kj::Promise<void> StudyServer::Server::subscribeY(SubscribeYContext context) {
     return kj::READY_NOW;
   }
 
-  auto callback = std::make_unique<Callback<Result<capnp::Text, Ng>>::Client>(context.getParams().getCallback());
+  auto callback =
+      std::make_unique<EsUtil::Callback<Result<capnp::Text, Ng>>::Client>(context.getParams().getCallback());
   if (!callback) {
     context.getResults().initResult().initError().setMessage("could not hold callback object");
     return kj::READY_NOW;

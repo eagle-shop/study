@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 project(schemas CXX)
 
 capnp_generate_cpp(studySources studyHeaders
+  es_util.capnp
   common.capnp
   study.capnp
 )

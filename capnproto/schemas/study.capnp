@@ -1,7 +1,7 @@
 @0xd1f41a741501db7a;
 
-using import "common.capnp".Stream;
-using import "common.capnp".Callback;
+using import "es_util.capnp".EsUtil.Stream;
+using import "es_util.capnp".EsUtil.Callback;
 using import "common.capnp".Ok;
 using import "common.capnp".Ng;
 using import "common.capnp".Result;

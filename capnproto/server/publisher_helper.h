@@ -4,7 +4,6 @@
 #define CAPNPROTO_SERVER_PUBLISHER_HELPER_H_
 
 #include <capnp/blob.h>
-#include <common.capnp.h>
 #include <kj/memory.h>
 
 #include <memory>
@@ -13,6 +12,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include "es_util.capnp.h"
 #include "log.h"
 
 namespace es_util {
@@ -26,7 +26,7 @@ class ClientInterface {
   virtual void disconnection(ClientId clientId) = 0;
 };
 
-class Client final : public Stream::Server {
+class Client final : public EsUtil::Stream::Server {
  public:
   explicit Client(ClientId clientId, const std::shared_ptr<ClientInterface> &interface)
       : mClientId(clientId), mInterface(interface) {}
@@ -69,7 +69,7 @@ class PublisherHelper final : public ClientInterface, public std::enable_shared_
     return ret;
   }
 
-  kj::Own<Client> addSubscriber(std::unique_ptr<typename Callback<Result>::Client> client) {
+  kj::Own<Client> addSubscriber(std::unique_ptr<typename EsUtil::Callback<Result>::Client> client) {
     if (!mClient.emplace(mClient.size(), std::move(client)).second) {
       Log::print("[server]PublisherHelper::addSubscriber NG (" + mLogName + ")");
       return kj::Own<Client>();
@@ -130,7 +130,7 @@ class PublisherHelper final : public ClientInterface, public std::enable_shared_
   const std::string mLogName;
   std::jthread mWorkerThread;
   kj::Own<const kj::Executor> mExecutor;
-  std::unordered_map<std::size_t, std::unique_ptr<typename Callback<Result>::Client>> mClient;
+  std::unordered_map<std::size_t, std::unique_ptr<typename EsUtil::Callback<Result>::Client>> mClient;
 };
 
 };  // namespace cap
