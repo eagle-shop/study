@@ -15,11 +15,7 @@ target_compile_features(server
     cxx_std_20
 )
 
-target_compile_options(server
-  PUBLIC
-    -Wall
-    -Wextra
-    -Werror
-)
+include(${CMAKE_SOURCE_DIR}/options.cmake)
+set_common_compile_options(server)
 
 add_dependencies(server schemas)

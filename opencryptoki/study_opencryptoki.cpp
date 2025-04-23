@@ -124,7 +124,7 @@ std::unique_ptr<StudyOpencryptoki::bit256> StudyOpencryptoki::sha256sum(const st
   unsigned char buf[1024] = {};
   ssize_t readSize;
   while ((readSize = read(fd, buf, sizeof(buf))) > 0) {
-    ret = mFunctionList->C_DigestUpdate(mSessionHandle, buf, readSize);
+    ret = mFunctionList->C_DigestUpdate(mSessionHandle, buf, static_cast<CK_ULONG>(readSize));
     if (ret != CKR_OK) {
       std::cerr << "C_DigestUpdate error ret: " << ret << std::endl;
       return nullptr;

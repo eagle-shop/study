@@ -12,12 +12,8 @@ target_compile_features(StudySqlite3
     cxx_std_20
 )
 
-target_compile_options(StudySqlite3
-  PUBLIC
-    -Wall
-    -Wextra
-    -Werror
-)
+include(${CMAKE_SOURCE_DIR}/options.cmake)
+set_common_compile_options(StudySqlite3)
 
 target_link_libraries(StudySqlite3
   PRIVATE

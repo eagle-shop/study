@@ -12,8 +12,8 @@
 
 class Data final {
  public:
-  explicit Data(const std::string &fileName, std::size_t heapSizeMB = 50)
-      : mFileName(fileName), mHeapSize(1024 * 1024 * heapSizeMB) {}
+  explicit Data(const std::string &fileName, std::streamsize heapSizeMB = 50)
+      : mFileName(fileName), mHeapSize((heapSizeMB > 0) ? (1024 * 1024 * heapSizeMB) : (1024 * 1024 * 50)) {}
   ~Data() = default;
 
   bool openFile() {
@@ -25,7 +25,7 @@ class Data final {
     mIfs = std::ifstream(mFileName, std::ios_base::in | std::ios_base::binary);
     if (mIfs.value().is_open()) {
       mIfs.value().seekg(0, std::ios_base::beg);
-      mBuf = std::make_unique<char[]>(mHeapSize);
+      mBuf = std::make_unique<char[]>(static_cast<std::size_t>(mHeapSize));
       if (!mBuf) {
         std::cerr << "Failed to allocate heap memory. filename: " << mFileName << std::endl;
         closeFile();
@@ -87,11 +87,11 @@ class Data final {
   std::optional<std::ifstream> mIfs;
   std::unique_ptr<char[]> mBuf;
   const std::string mFileName;
-  const std::size_t mHeapSize;
+  const std::streamsize mHeapSize;
 };
 
-int copyData(struct archive *archiveRead, struct archive *archiveWrite) {
-  int ret           = ARCHIVE_FATAL;
+la_ssize_t copyData(struct archive *archiveRead, struct archive *archiveWrite) {
+  la_ssize_t ret    = ARCHIVE_FATAL;
   const void *buf   = nullptr;
   std::size_t size  = 0;
   la_int64_t offset = 0;

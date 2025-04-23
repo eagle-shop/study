@@ -21,11 +21,7 @@ target_compile_features(schemas
     cxx_std_20
 )
 
-target_compile_options(schemas
-  PUBLIC
-    -Wall
-    -Wextra
-    -Werror
-)
+include(${CMAKE_SOURCE_DIR}/options.cmake)
+set_common_compile_options(schemas)
 
 set(generateHeaders ${CMAKE_CURRENT_BINARY_DIR} PARENT_SCOPE)

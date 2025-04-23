@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(server CXX)
+project(log CXX)
 
 add_library(log log.cpp)
 
@@ -12,9 +12,5 @@ target_compile_features(log
     cxx_std_20
 )
 
-target_compile_options(log
-  PUBLIC
-    -Wall
-    -Wextra
-    -Werror
-)
+include(${CMAKE_SOURCE_DIR}/options.cmake)
+set_common_compile_options(log)

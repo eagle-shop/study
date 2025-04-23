@@ -15,11 +15,7 @@ target_compile_features(client
     cxx_std_20
 )
 
-target_compile_options(client
-  PUBLIC
-    -Wall
-    -Wextra
-    -Werror
-)
+include(${CMAKE_SOURCE_DIR}/options.cmake)
+set_common_compile_options(client)
 
 add_dependencies(client schemas)

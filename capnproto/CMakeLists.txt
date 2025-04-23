@@ -25,12 +25,8 @@ target_compile_features(study_capnp
     cxx_std_20
 )
 
-target_compile_options(study_capnp
-  PUBLIC
-    -Wall
-    -Wextra
-    -Werror
-)
+include(${CMAKE_SOURCE_DIR}/options.cmake)
+set_common_compile_options(study_capnp)
 
 target_link_libraries(study_capnp
   PRIVATE

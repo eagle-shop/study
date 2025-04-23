@@ -18,12 +18,8 @@ target_compile_features(Test
     cxx_std_20
 )
 
-target_compile_options(Test
-  PUBLIC
-    -Wall
-    -Wextra
-    -Werror
-)
+include(${CMAKE_SOURCE_DIR}/options.cmake)
+set_common_compile_options(Test)
 
 target_link_libraries(Test
   PRIVATE

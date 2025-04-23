@@ -12,12 +12,8 @@ target_compile_features(study_libarchive
     cxx_std_20
 )
 
-target_compile_options(study_libarchive
-  PUBLIC
-    -Wall
-    -Wextra
-    -Werror
-)
+include(${CMAKE_SOURCE_DIR}/options.cmake)
+set_common_compile_options(study_libarchive)
 
 target_link_libraries(study_libarchive
   PRIVATE
