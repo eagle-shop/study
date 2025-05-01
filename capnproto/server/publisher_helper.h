@@ -56,6 +56,9 @@ class PublisherHelper final : public ClientInterface, public std::enable_shared_
 
   template <typename F>
   bool setWorker(F &&func) {
+    static_assert(std::is_invocable_v<F, std::stop_token>,
+                  "Worker function must take std::stop_token as its first argument");
+
     bool ret = false;
     if (!mExecutor) {
       mExecutor = kj::getCurrentThreadExecutor().addRef();
