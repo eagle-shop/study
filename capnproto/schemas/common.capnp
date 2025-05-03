@@ -13,3 +13,7 @@ struct Result(ResultOk, ResultNg) {
     error @1: ResultNg;
   }
 }
+
+struct Date {
+  iso8601 @0: Text;
+}

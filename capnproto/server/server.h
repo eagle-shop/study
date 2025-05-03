@@ -73,7 +73,7 @@ class StudyServer final {
     std::unordered_map<std::size_t, std::unique_ptr<EsUtil::Callback<capnp::Text>::Client>> mClientX;
     std::mutex mMutex;
     const std::shared_ptr<es_util::cap::PublisherHelper<capnp::Text>> mPublisherX;
-    const std::shared_ptr<es_util::cap::PublisherHelper<Result<capnp::Text, Ng>>> mPublisherY;
+    const std::shared_ptr<es_util::cap::PublisherHelper<Result<Study::DailyNotification, Ng>>> mPublisherY;
   };
 
   std::thread mMainThread;

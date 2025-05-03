@@ -130,7 +130,7 @@ StudyServer::Server::Server(const std::weak_ptr<EzRpcServerInterface> &ezRpcServ
     : mInterface(ezRpcServerInterface),
       mTaskSet(std::make_shared<kj::TaskSet>(*this)),
       mPublisherX(es_util::cap::PublisherHelper<capnp::Text>::create(mTaskSet, "subscribeX")),
-      mPublisherY(es_util::cap::PublisherHelper<Result<capnp::Text, Ng>>::create(mTaskSet, "subscribeY")) {
+      mPublisherY(es_util::cap::PublisherHelper<Result<Study::DailyNotification, Ng>>::create(mTaskSet, "subscribeY")) {
   auto ins = mInterface.lock();
   if (!ins) {
     Log::printAndThrow("[server error]EzRpcServerInterface is null");
@@ -242,8 +242,8 @@ kj::Promise<void> StudyServer::Server::subscribeY(SubscribeYContext context) {
     return kj::READY_NOW;
   }
 
-  auto callback =
-      std::make_unique<EsUtil::Callback<Result<capnp::Text, Ng>>::Client>(context.getParams().getCallback());
+  auto callback = std::make_unique<EsUtil::Callback<Result<Study::DailyNotification, Ng>>::Client>(
+      context.getParams().getCallback());
   if (!callback) {
     context.getResults().initResult().initError().setMessage("could not hold callback object");
     return kj::READY_NOW;
@@ -260,8 +260,9 @@ kj::Promise<void> StudyServer::Server::subscribeY(SubscribeYContext context) {
       auto ret = mPublisherY->setWorker([this](std::stop_token stoken) {
         while (!stoken.stop_requested()) {
           capnp::MallocMessageBuilder resultMessageBuilder;
-          auto result = resultMessageBuilder.initRoot<Result<capnp::Text, Ng>>();
-          result.setValue("send Y");
+          auto result = resultMessageBuilder.initRoot<Result<Study::DailyNotification, Ng>>();
+          result.initValue().initDate().setIso8601("2000-01-01T00:00:00Z");
+          result.getValue().setDmy("send Y");
           mPublisherY->publish(kj::mv(result));
         }
       });

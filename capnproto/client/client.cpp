@@ -16,8 +16,8 @@ class CallbackX final : public EsUtil::Callback<capnp::Text>::Server {
 
  private:
   kj::Promise<void> send(SendContext context) final {
-    if (context.getParams().hasValue() && mPromiseFulfiller) {
-      Log::print(std::string("[client]receive: ") + context.getParams().getValue().cStr() + " " +
+    if (mPromiseFulfiller) {
+      Log::print(std::string("[client]receive: ") + context.getParams().toString().flatten().cStr() + " " +
                  std::to_string(mCounter) + "/" + std::to_string(mInitialValue));
       mCounter--;
       if (mCounter == 0) {
@@ -34,7 +34,7 @@ class CallbackX final : public EsUtil::Callback<capnp::Text>::Server {
   uint64_t mCounter;
 };
 
-class CallbackY final : public EsUtil::Callback<Result<capnp::Text, Ng>>::Server {
+class CallbackY final : public EsUtil::Callback<Result<Study::DailyNotification, Ng>>::Server {
  public:
   explicit CallbackY(kj::Own<kj::PromiseFulfiller<void>> promiseFulfiller, uint64_t end = 3)
       : mPromiseFulfiller(kj::mv(promiseFulfiller)), mInitialValue(end), mCounter(end) {}
@@ -42,8 +42,8 @@ class CallbackY final : public EsUtil::Callback<Result<capnp::Text, Ng>>::Server
 
  private:
   kj::Promise<void> send(SendContext context) final {
-    if (context.getParams().hasValue() && context.getParams().getValue().hasValue() && mPromiseFulfiller) {
-      Log::print(std::string("[client]receive: ") + context.getParams().getValue().getValue().cStr() + " " +
+    if (mPromiseFulfiller) {
+      Log::print(std::string("[client]receive: ") + context.getParams().toString().flatten().cStr() + " " +
                  std::to_string(mCounter) + "/" + std::to_string(mInitialValue));
       mCounter--;
       if (mCounter == 0) {
