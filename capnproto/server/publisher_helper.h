@@ -4,8 +4,10 @@
 #define CAPNPROTO_SERVER_PUBLISHER_HELPER_H_
 
 #include <capnp/blob.h>
+#include <kj/exception.h>
 #include <kj/memory.h>
 
+#include <exception>
 #include <memory>
 #include <string>
 #include <thread>
@@ -88,9 +90,13 @@ class PublisherHelper final : public ClientInterface, public std::enable_shared_
       try {
         mExecutor->executeSync([this, value = std::forward<T>(value), &logName = mLogName]() {
           for (auto &e : mClient) {
-            auto callback = e.second->sendRequest();
-            callback.setValue(value);
-            mTaskSet->add(callback.send()
+            auto callback = std::make_unique<decltype(e.second->sendRequest())>(e.second->sendRequest());
+            if (!callback) {
+              continue;
+            }
+
+            callback->setValue(value);
+            mTaskSet->add(callback->send()
                               .then(
                                   [logName]() {
                                     Log::print("[server]PublisherHelper::publish callback.send() OK (" + logName + ")");
@@ -103,10 +109,10 @@ class PublisherHelper final : public ClientInterface, public std::enable_shared_
                               .attach(kj::mv(callback)));
           }
         });
-      } catch (kj::Exception &e) {
+      } catch (const kj::Exception &e) {
         Log::print(std::string("[server]PublisherHelper::publish kj::Exception: ") + e.getDescription().cStr() + " (" +
                    mLogName + ")");
-      } catch (std::exception &e) {
+      } catch (const std::exception &e) {
         Log::print(std::string("[server]PublisherHelper::publish std::exception: ") + e.what() + " (" + mLogName + ")");
       } catch (...) {
         Log::print("[server]PublisherHelper::publish unknown exception (" + mLogName + ")");
@@ -136,7 +142,7 @@ class PublisherHelper final : public ClientInterface, public std::enable_shared_
   std::unordered_map<std::size_t, std::unique_ptr<typename EsUtil::Callback<Result>::Client>> mClient;
 };
 
-};  // namespace cap
-};  // namespace es_util
+}  // namespace cap
+}  // namespace es_util
 
 #endif  // CAPNPROTO_SERVER_PUBLISHER_HELPER_H_

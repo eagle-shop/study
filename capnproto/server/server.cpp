@@ -59,9 +59,9 @@ StudyServer::StudyServer() {
           Log::print("[server]main fulfill");
           ezRpcServerInterface->clearTasks();
           Log::print("[server]main loop end");
-        } catch (kj::Exception &e) {
+        } catch (const kj::Exception &e) {
           Log::print(std::string("[server error]main loop kj::Exception: ") + e.getDescription().cStr());
-        } catch (std::exception &e) {
+        } catch (const std::exception &e) {
           Log::print(std::string("[server error]main loop std::exception: ") + e.what());
         } catch (...) {
           Log::print("[server error]main loop unknouwn exception");

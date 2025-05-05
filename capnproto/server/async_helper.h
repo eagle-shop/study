@@ -4,11 +4,16 @@
 #define CAPNPROTO_SERVER_ASYNC_HELPER_H_
 
 #include <kj/async.h>
+#include <kj/exception.h>
 
+#include <exception>
 #include <memory>
 #include <optional>
+#include <string>
 #include <thread>
 #include <utility>
+
+#include "log.h"
 
 namespace es_util {
 namespace cap {
@@ -16,29 +21,48 @@ namespace cap {
 class AsyncHelper {
  public:
   template <typename DoWorker, typename DoMain>
-  static kj::Promise<void> executeAsync(DoWorker &&doWorkerFunc, DoMain &&doMainFunc) {
-    using T = decltype(doWorkerFunc());
-    auto promiseAndCrossThreadFulfiller =
-        std::make_shared<kj::PromiseCrossThreadFulfillerPair<T>>(kj::newPromiseAndCrossThreadFulfiller<T>());
-    if (promiseAndCrossThreadFulfiller) {
-      std::thread thread([func = std::forward<DoWorker>(doWorkerFunc), promiseAndCrossThreadFulfiller]() {
-        if (promiseAndCrossThreadFulfiller && promiseAndCrossThreadFulfiller->fulfiller) {
-          promiseAndCrossThreadFulfiller->fulfiller->fulfill(func());
-        }
-      });
-      return promiseAndCrossThreadFulfiller->promise.then(
-          [func = std::forward<DoMain>(doMainFunc), thread = std::move(thread)](T &&result) mutable {
-            func(std::forward<T>(result));
-            thread.join();
-          });
-    } else {
-      doMainFunc(std::nullopt);
-      return kj::NEVER_DONE;
+  static kj::Promise<void> executeAsync(DoWorker &&doWorkerFunc, DoMain &&doMainFunc) noexcept {
+    try {
+      using T = decltype(doWorkerFunc());
+      auto promiseAndCrossThreadFulfiller =
+          std::make_shared<kj::PromiseCrossThreadFulfillerPair<T>>(kj::newPromiseAndCrossThreadFulfiller<T>());
+      if (promiseAndCrossThreadFulfiller) {
+        std::jthread thread([func = std::forward<DoWorker>(doWorkerFunc), promiseAndCrossThreadFulfiller]() {
+          try {
+            if (promiseAndCrossThreadFulfiller && promiseAndCrossThreadFulfiller->fulfiller) {
+              promiseAndCrossThreadFulfiller->fulfiller->fulfill(func());
+            }
+          } catch (const kj::Exception &e) {
+            Log::print(std::string("[AsyncHelper][Async Thread]error kj::Exception: ") + e.getDescription().cStr());
+          } catch (const std::exception &e) {
+            Log::print(std::string("[AsyncHelper][Async Thread]error std::exception: ") + e.what());
+          } catch (...) {
+            Log::print("[AsyncHelper][Async Thread]error unknown exception");
+          }
+        });
+        return promiseAndCrossThreadFulfiller->promise
+            .then([func = std::forward<DoMain>(doMainFunc), thread = std::move(thread)](T &&result) mutable {
+              func(std::forward<T>(result));
+            })
+            .attach(std::move(promiseAndCrossThreadFulfiller));
+      } else {
+        doMainFunc(std::nullopt);
+        return kj::READY_NOW;
+      }
+    } catch (const kj::Exception &e) {
+      Log::print(std::string("[AsyncHelper]error kj::Exception: ") + e.getDescription().cStr());
+      return kj::READY_NOW;
+    } catch (const std::exception &e) {
+      Log::print(std::string("[AsyncHelper]error std::exception: ") + e.what());
+      return kj::READY_NOW;
+    } catch (...) {
+      Log::print("[AsyncHelper]error unknown exception");
+      return kj::READY_NOW;
     }
   }
 };
 
-};  // namespace cap
-};  // namespace es_util
+}  // namespace cap
+}  // namespace es_util
 
 #endif  // CAPNPROTO_SERVER_ASYNC_HELPER_H_
