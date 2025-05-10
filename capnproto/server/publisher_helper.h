@@ -88,7 +88,9 @@ class PublisherHelper final : public ClientInterface, public std::enable_shared_
   void publish(T &&value) {
     if (mExecutor && mExecutor->isLive() && mTaskSet) {
       try {
+        Log::print("[server]PublisherHelper::publish try to executeSync (" + mLogName + ")");
         mExecutor->executeSync([this, value = std::forward<T>(value), &logName = mLogName]() {
+          Log::print("[server]PublisherHelper::publish start executeSync func (" + mLogName + ")");
           for (auto &e : mClient) {
             auto callback = std::make_unique<decltype(e.second->sendRequest())>(e.second->sendRequest());
             if (!callback) {
@@ -109,6 +111,7 @@ class PublisherHelper final : public ClientInterface, public std::enable_shared_
                               .attach(kj::mv(callback)));
           }
         });
+        Log::print("[server]PublisherHelper::publish executeSync end (" + mLogName + ")");
       } catch (const kj::Exception &e) {
         Log::print(std::string("[server]PublisherHelper::publish kj::Exception: ") + e.getDescription().cStr() + " (" +
                    mLogName + ")");
@@ -125,7 +128,9 @@ class PublisherHelper final : public ClientInterface, public std::enable_shared_
   virtual ~PublisherHelper() noexcept {
     if (mWorkerThread.joinable()) {
       mWorkerThread.request_stop();
+      Log::print("[server]PublisherHelper::~PublisherHelper try to join (" + mLogName + ")");
       mWorkerThread.join();
+      Log::print("[server]PublisherHelper::~PublisherHelper end (" + mLogName + ")");
     }
   }
 
