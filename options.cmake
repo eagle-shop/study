@@ -9,6 +9,14 @@ function(set_common_compile_options target)
       -Wshadow
       -Wnull-dereference
       -Wformat=2
+      -Wcast-align
+      -Wcast-qual
+      -Wbad-function-cast
+      -Wfloat-equal
+      -Wmultichar
+      -Wredundant-decls
+      -Wstack-protector
+      -Wswitch-enum
       -fstack-protector-strong
       -D_FORTIFY_SOURCE=2
       -fPIC
