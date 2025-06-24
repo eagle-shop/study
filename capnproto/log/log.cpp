@@ -3,6 +3,7 @@
 #include "log.h"
 
 #include <chrono>
+#include <iomanip>
 #include <iostream>
 #include <string>
 #include <thread>

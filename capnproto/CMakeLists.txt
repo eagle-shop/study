@@ -35,5 +35,4 @@ target_link_libraries(study_capnp
     schemas
     log
     CapnProto::capnp-rpc
-    pthread
 )

@@ -28,5 +28,7 @@ function(set_common_compile_options target)
       -Wl,-z,relro
       -Wl,-z,now
       -Wl,-z,noexecstack
+      -Wl,--as-needed
+      -pie
   )
 endfunction()
