@@ -1,6 +1,7 @@
 #include "study_opencryptoki.h"
 
 #include <fcntl.h>
+#include <unistd.h>
 
 #include <iomanip>
 #include <iostream>

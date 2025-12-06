@@ -18,7 +18,7 @@ target_include_directories(schemas
 
 target_compile_features(schemas
   PUBLIC
-    cxx_std_20
+    cxx_std_17
 )
 
 include(${CMAKE_SOURCE_DIR}/options.cmake)

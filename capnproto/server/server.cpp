@@ -182,7 +182,7 @@ kj::Promise<void> StudyServer::Server::deleteUserId(DeleteUserIdContext context)
   return es_util::cap::AsyncHelper::executeAsync(
       [this, id = context.getParams().getUserId().getId()]() {
         std::lock_guard<std::mutex> lock(mMutex);
-        if (mUserDataList.contains(id)) {
+        if (mUserDataList.count(id) > 0) {
           mUserDataList.erase(id);
           return true;
         } else {
@@ -219,8 +219,8 @@ kj::Promise<void> StudyServer::Server::subscribeX(SubscribeXContext context) {
     }
 
     if (!(*mPublisherX)) {
-      auto ret = mPublisherX->setWorker([this](std::stop_token stoken) {
-        while (!stoken.stop_requested()) {
+      auto ret = mPublisherX->setWorker([this](const std::atomic<bool>& stopFlag) {
+        while (!stopFlag.load()) {
           mPublisherX->publish("send X");
         }
       });
@@ -257,8 +257,8 @@ kj::Promise<void> StudyServer::Server::subscribeY(SubscribeYContext context) {
     }
 
     if (!(*mPublisherY)) {
-      auto ret = mPublisherY->setWorker([this](std::stop_token stoken) {
-        while (!stoken.stop_requested()) {
+      auto ret = mPublisherY->setWorker([this](const std::atomic<bool>& stopFlag) {
+        while (!stopFlag.load()) {
           capnp::MallocMessageBuilder resultMessageBuilder;
           auto result = resultMessageBuilder.initRoot<Result<Study::DailyNotification, Ng>>();
           result.initValue().initDate().setIso8601("2000-01-01T00:00:00Z");

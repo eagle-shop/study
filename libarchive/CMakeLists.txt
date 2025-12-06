@@ -9,7 +9,7 @@ target_include_directories(study_libarchive
 
 target_compile_features(study_libarchive
   PUBLIC
-    cxx_std_20
+    cxx_std_17
 )
 
 include(${CMAKE_SOURCE_DIR}/options.cmake)

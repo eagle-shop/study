@@ -9,7 +9,7 @@ target_include_directories(log
 
 target_compile_features(log
   PUBLIC
-    cxx_std_20
+    cxx_std_17
 )
 
 include(${CMAKE_SOURCE_DIR}/options.cmake)

@@ -15,7 +15,7 @@ target_link_libraries(StudyOpencryptoki
 
 target_compile_features(StudyOpencryptoki
   PUBLIC
-    cxx_std_20
+    cxx_std_17
 )
 
 include(${CMAKE_SOURCE_DIR}/options.cmake)

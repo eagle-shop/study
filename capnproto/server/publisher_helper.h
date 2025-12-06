@@ -9,6 +9,7 @@
 #include <kj/memory.h>
 #include <kj/mutex.h>
 
+#include <atomic>
 #include <exception>
 #include <memory>
 #include <string>
@@ -60,14 +61,14 @@ class PublisherHelper final : public ClientInterface, public std::enable_shared_
 
   template <typename F>
   bool setWorker(F&& func) {
-    static_assert(std::is_invocable_v<F, std::stop_token>,
-                  "Worker function must take std::stop_token as its first argument");
+    static_assert(std::is_invocable_v<F, const std::atomic<bool>&>,
+                  "Worker function must take const std::atomic<bool>& as its first argument");
 
     bool ret = false;
 
     if (!mWorkerThread.joinable()) {
       *mExecutor.lockExclusive() = kj::getCurrentThreadExecutor();
-      mWorkerThread              = std::jthread(std::forward<F>(func));
+      mWorkerThread              = std::thread(std::forward<F>(func), std::cref(mStopFlag));
       ret                        = true;
     }
 
@@ -139,7 +140,7 @@ class PublisherHelper final : public ClientInterface, public std::enable_shared_
   virtual ~PublisherHelper() noexcept {
     if (mWorkerThread.joinable()) {
       *mExecutor.lockExclusive() = nullptr;
-      mWorkerThread.request_stop();
+      mStopFlag.store(true);
       Log::print("[server]PublisherHelper::~PublisherHelper try to join (" + mLogName + ")");
       mWorkerThread.join();
       Log::print("[server]PublisherHelper::~PublisherHelper end (" + mLogName + ")");
@@ -148,14 +149,15 @@ class PublisherHelper final : public ClientInterface, public std::enable_shared_
 
  private:
   explicit PublisherHelper(const std::shared_ptr<kj::TaskSet>& taskSet, const std::string& logName)
-      : mTaskSet(taskSet), mLogName(logName) {}
+      : mTaskSet(taskSet), mLogName(logName), mStopFlag(false) {}
 
   void disconnection(ClientId clientId) final { mClient.erase(clientId); }
 
   const std::shared_ptr<kj::TaskSet> mTaskSet;
   const std::string mLogName;
   kj::MutexGuarded<kj::Maybe<const kj::Executor&>> mExecutor;
-  std::jthread mWorkerThread;
+  std::thread mWorkerThread;
+  std::atomic<bool> mStopFlag;
   std::unordered_map<std::size_t, std::unique_ptr<typename EsUtil::Callback<Result>::Client>> mClient;
 };
 

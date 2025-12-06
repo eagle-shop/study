@@ -15,7 +15,7 @@ target_include_directories(Test
 
 target_compile_features(Test
   PUBLIC
-    cxx_std_20
+    cxx_std_17
 )
 
 include(${CMAKE_SOURCE_DIR}/options.cmake)

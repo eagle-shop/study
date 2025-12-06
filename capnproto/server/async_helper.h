@@ -27,7 +27,7 @@ class AsyncHelper {
       auto promiseAndCrossThreadFulfiller =
           std::make_shared<kj::PromiseCrossThreadFulfillerPair<T>>(kj::newPromiseAndCrossThreadFulfiller<T>());
       if (promiseAndCrossThreadFulfiller) {
-        std::jthread thread([func = std::forward<DoWorker>(doWorkerFunc), promiseAndCrossThreadFulfiller]() {
+        std::thread thread([func = std::forward<DoWorker>(doWorkerFunc), promiseAndCrossThreadFulfiller]() {
           try {
             if (promiseAndCrossThreadFulfiller && promiseAndCrossThreadFulfiller->fulfiller) {
               promiseAndCrossThreadFulfiller->fulfiller->fulfill(func());
@@ -43,6 +43,7 @@ class AsyncHelper {
         return promiseAndCrossThreadFulfiller->promise
             .then([func = std::forward<DoMain>(doMainFunc), thread = std::move(thread)](T&& result) mutable {
               func(std::forward<T>(result));
+              thread.join();
             })
             .attach(std::move(promiseAndCrossThreadFulfiller));
       } else {

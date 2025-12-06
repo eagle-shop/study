@@ -12,7 +12,7 @@ target_include_directories(client
 
 target_compile_features(client
   PUBLIC
-    cxx_std_20
+    cxx_std_17
 )
 
 include(${CMAKE_SOURCE_DIR}/options.cmake)

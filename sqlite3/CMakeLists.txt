@@ -9,7 +9,7 @@ target_include_directories(StudySqlite3
 
 target_compile_features(StudySqlite3
   PUBLIC
-    cxx_std_20
+    cxx_std_17
 )
 
 include(${CMAKE_SOURCE_DIR}/options.cmake)

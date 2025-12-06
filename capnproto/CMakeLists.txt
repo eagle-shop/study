@@ -22,7 +22,7 @@ target_include_directories(study_capnp
 
 target_compile_features(study_capnp
   PUBLIC
-    cxx_std_20
+    cxx_std_17
 )
 
 include(${CMAKE_SOURCE_DIR}/options.cmake)
