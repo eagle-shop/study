@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <iostream>
 
-StudySqlite3::StudySqlite3(const std::string &filepath, bool create) : mDb(nullptr) {
+StudySqlite3::StudySqlite3(const std::string& filepath, bool create) : mDb(nullptr) {
   if (filepath.empty() || (!create && !std::filesystem::exists(filepath))) {
     const std::string errorMessage("file not found");
     std::cerr << errorMessage << std::endl;

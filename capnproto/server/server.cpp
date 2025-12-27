@@ -59,9 +59,9 @@ StudyServer::StudyServer() {
           Log::print("[server]main fulfill");
           ezRpcServerInterface->clearTasks();
           Log::print("[server]main loop end");
-        } catch (const kj::Exception &e) {
+        } catch (const kj::Exception& e) {
           Log::print(std::string("[server error]main loop kj::Exception: ") + e.getDescription().cStr());
-        } catch (const std::exception &e) {
+        } catch (const std::exception& e) {
           Log::print(std::string("[server error]main loop std::exception: ") + e.what());
         } catch (...) {
           Log::print("[server error]main loop unknouwn exception");
@@ -94,13 +94,13 @@ StudyServer::~StudyServer() {
 
 StudyServer::EzRpcServerInterface::EzRpcServerInterface() : mStudyServer(nullptr) {}
 
-void StudyServer::EzRpcServerInterface::initialize(const std::weak_ptr<capnp::EzRpcServer> &ezRpcServer) {
+void StudyServer::EzRpcServerInterface::initialize(const std::weak_ptr<capnp::EzRpcServer>& ezRpcServer) {
   mEzRpcServer = ezRpcServer;
 }
 
-void StudyServer::EzRpcServerInterface::setStudyServer(StudyServer::Server *studyServer) { mStudyServer = studyServer; }
+void StudyServer::EzRpcServerInterface::setStudyServer(StudyServer::Server* studyServer) { mStudyServer = studyServer; }
 
-kj::WaitScope &StudyServer::EzRpcServerInterface::getWaitScope() {
+kj::WaitScope& StudyServer::EzRpcServerInterface::getWaitScope() {
   auto ins = mEzRpcServer.lock();
   if (!ins) {
     Log::printAndThrow("[server]EzRpcServer is null");
@@ -109,7 +109,7 @@ kj::WaitScope &StudyServer::EzRpcServerInterface::getWaitScope() {
   return ins->getWaitScope();
 }
 
-kj::AsyncIoProvider &StudyServer::EzRpcServerInterface::getIoProvider() {
+kj::AsyncIoProvider& StudyServer::EzRpcServerInterface::getIoProvider() {
   auto ins = mEzRpcServer.lock();
   if (!ins) {
     Log::printAndThrow("[server]EzRpcServer is null");
@@ -126,7 +126,7 @@ void StudyServer::EzRpcServerInterface::clearTasks() {
   mStudyServer->clearTasks();
 }
 
-StudyServer::Server::Server(const std::weak_ptr<EzRpcServerInterface> &ezRpcServerInterface)
+StudyServer::Server::Server(const std::weak_ptr<EzRpcServerInterface>& ezRpcServerInterface)
     : mInterface(ezRpcServerInterface),
       mTaskSet(std::make_shared<kj::TaskSet>(*this)),
       mPublisherX(es_util::cap::PublisherHelper<capnp::Text>::create(mTaskSet, "subscribeX")),
@@ -161,7 +161,7 @@ kj::Promise<void> StudyServer::Server::createUserId(CreateUserIdContext context)
         auto ret = mUserDataList.emplace(mUserDataList.size(), UserData{});
         return ret.second ? std::optional<UserId>(mUserDataList.size() - 1) : std::nullopt;
       },
-      [context = kj::mv(context)](std::optional<std::optional<UserId>> &&result) mutable {
+      [context = kj::mv(context)](std::optional<std::optional<UserId>>&& result) mutable {
         if (result && result.value()) {
           context.getResults().initResult().initValue().setId(result.value().value());
           Log::print("[server]createUserId end. id: " + std::to_string(result.value().value()));
@@ -189,7 +189,7 @@ kj::Promise<void> StudyServer::Server::deleteUserId(DeleteUserIdContext context)
           return false;
         }
       },
-      [context = kj::mv(context)](std::optional<bool> &&result) mutable {
+      [context = kj::mv(context)](std::optional<bool>&& result) mutable {
         if (result && result.value()) {
           context.getResults().initResult().initValue();
         } else {
@@ -278,6 +278,6 @@ kj::Promise<void> StudyServer::Server::subscribeY(SubscribeYContext context) {
   return kj::READY_NOW;
 }
 
-void StudyServer::Server::taskFailed(kj::Exception &&e) {
+void StudyServer::Server::taskFailed(kj::Exception&& e) {
   Log::print(std::string("[server]taskFailed: ") + e.getDescription().cStr());
 }

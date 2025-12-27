@@ -20,10 +20,10 @@ class StudyServer final {
   StudyServer();
   ~StudyServer();
 
-  StudyServer(const StudyServer &)            = delete;
-  StudyServer(StudyServer &&)                 = delete;
-  StudyServer &operator=(const StudyServer &) = delete;
-  StudyServer &operator=(StudyServer &&)      = delete;
+  StudyServer(const StudyServer&)            = delete;
+  StudyServer(StudyServer&&)                 = delete;
+  StudyServer& operator=(const StudyServer&) = delete;
+  StudyServer& operator=(StudyServer&&)      = delete;
 
  private:
   class Server;
@@ -32,26 +32,26 @@ class StudyServer final {
     EzRpcServerInterface();
     ~EzRpcServerInterface() = default;
 
-    EzRpcServerInterface(const EzRpcServerInterface &)            = delete;
-    EzRpcServerInterface(EzRpcServerInterface &&)                 = delete;
-    EzRpcServerInterface &operator=(const EzRpcServerInterface &) = delete;
-    EzRpcServerInterface &operator=(EzRpcServerInterface &&)      = delete;
+    EzRpcServerInterface(const EzRpcServerInterface&)            = delete;
+    EzRpcServerInterface(EzRpcServerInterface&&)                 = delete;
+    EzRpcServerInterface& operator=(const EzRpcServerInterface&) = delete;
+    EzRpcServerInterface& operator=(EzRpcServerInterface&&)      = delete;
 
-    void initialize(const std::weak_ptr<capnp::EzRpcServer> &ezRpcServer);
+    void initialize(const std::weak_ptr<capnp::EzRpcServer>& ezRpcServer);
 
-    void setStudyServer(StudyServer::Server *studyServer);
-    kj::WaitScope &getWaitScope();
-    kj::AsyncIoProvider &getIoProvider();
+    void setStudyServer(StudyServer::Server* studyServer);
+    kj::WaitScope& getWaitScope();
+    kj::AsyncIoProvider& getIoProvider();
     void clearTasks();
 
    private:
     std::weak_ptr<capnp::EzRpcServer> mEzRpcServer;
-    StudyServer::Server *mStudyServer;
+    StudyServer::Server* mStudyServer;
   };
 
   class Server final : public Study::Server, public kj::TaskSet::ErrorHandler {
    public:
-    explicit Server(const std::weak_ptr<EzRpcServerInterface> &ezRpcServerInterface);
+    explicit Server(const std::weak_ptr<EzRpcServerInterface>& ezRpcServerInterface);
     virtual ~Server();
 
     void clearTasks();
@@ -61,7 +61,7 @@ class StudyServer final {
     kj::Promise<void> deleteUserId(DeleteUserIdContext context) final;
     kj::Promise<void> subscribeX(SubscribeXContext context) final;
     kj::Promise<void> subscribeY(SubscribeYContext context) final;
-    void taskFailed(kj::Exception &&e) final;
+    void taskFailed(kj::Exception&& e) final;
 
     using UserId = uint64_t;
 

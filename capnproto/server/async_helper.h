@@ -21,7 +21,7 @@ namespace cap {
 class AsyncHelper {
  public:
   template <typename DoWorker, typename DoMain>
-  static kj::Promise<void> executeAsync(DoWorker &&doWorkerFunc, DoMain &&doMainFunc) noexcept {
+  static kj::Promise<void> executeAsync(DoWorker&& doWorkerFunc, DoMain&& doMainFunc) noexcept {
     try {
       using T = decltype(doWorkerFunc());
       auto promiseAndCrossThreadFulfiller =
@@ -32,16 +32,16 @@ class AsyncHelper {
             if (promiseAndCrossThreadFulfiller && promiseAndCrossThreadFulfiller->fulfiller) {
               promiseAndCrossThreadFulfiller->fulfiller->fulfill(func());
             }
-          } catch (const kj::Exception &e) {
+          } catch (const kj::Exception& e) {
             Log::print(std::string("[AsyncHelper][Async Thread]error kj::Exception: ") + e.getDescription().cStr());
-          } catch (const std::exception &e) {
+          } catch (const std::exception& e) {
             Log::print(std::string("[AsyncHelper][Async Thread]error std::exception: ") + e.what());
           } catch (...) {
             Log::print("[AsyncHelper][Async Thread]error unknown exception");
           }
         });
         return promiseAndCrossThreadFulfiller->promise
-            .then([func = std::forward<DoMain>(doMainFunc), thread = std::move(thread)](T &&result) mutable {
+            .then([func = std::forward<DoMain>(doMainFunc), thread = std::move(thread)](T&& result) mutable {
               func(std::forward<T>(result));
             })
             .attach(std::move(promiseAndCrossThreadFulfiller));
@@ -49,10 +49,10 @@ class AsyncHelper {
         doMainFunc(std::nullopt);
         return kj::READY_NOW;
       }
-    } catch (const kj::Exception &e) {
+    } catch (const kj::Exception& e) {
       Log::print(std::string("[AsyncHelper]error kj::Exception: ") + e.getDescription().cStr());
       return kj::READY_NOW;
-    } catch (const std::exception &e) {
+    } catch (const std::exception& e) {
       Log::print(std::string("[AsyncHelper]error std::exception: ") + e.what());
       return kj::READY_NOW;
     } catch (...) {

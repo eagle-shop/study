@@ -12,7 +12,7 @@
 
 class Data final {
  public:
-  explicit Data(const std::string &fileName, std::streamsize heapSizeMB = 50)
+  explicit Data(const std::string& fileName, std::streamsize heapSizeMB = 50)
       : mFileName(fileName), mHeapSize((heapSizeMB > 0) ? (1024 * 1024 * heapSizeMB) : (1024 * 1024 * 50)) {}
   ~Data() = default;
 
@@ -44,7 +44,7 @@ class Data final {
     mBuf.reset();
   }
 
-  la_ssize_t readFile(const void **buf) {
+  la_ssize_t readFile(const void** buf) {
     try {
       mIfs.value().read(mBuf.get(), mHeapSize);
       *buf = mBuf.get();
@@ -90,9 +90,9 @@ class Data final {
   const std::streamsize mHeapSize;
 };
 
-la_ssize_t copyData(struct archive *archiveRead, struct archive *archiveWrite) {
+la_ssize_t copyData(struct archive* archiveRead, struct archive* archiveWrite) {
   la_ssize_t ret    = ARCHIVE_FATAL;
-  const void *buf   = nullptr;
+  const void* buf   = nullptr;
   std::size_t size  = 0;
   la_int64_t offset = 0;
 
@@ -127,7 +127,7 @@ la_ssize_t copyData(struct archive *archiveRead, struct archive *archiveWrite) {
   return ret;
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
   int64_t heapSizeMB             = 0;
   constexpr char errorMessage1[] = "./study_libarchive [heap size (MB)] [output dir (absolute path)] [input.tar_00]...";
   constexpr char errorMessage2[] = "e.g.) ./study_libarchive 50 ./output_dir ./input.tar_00 ./input.tar_01";
@@ -155,39 +155,39 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
-  static auto fileOpenCallback = [](struct archive *archiveRead, void *clientData) {
+  static auto fileOpenCallback = [](struct archive* archiveRead, void* clientData) {
     (void)archiveRead;
     if (clientData == nullptr) {
       std::cerr << "fileOpenCallback clientData nullptr" << std::endl;
       return ARCHIVE_FATAL;
     }
 
-    return ((Data *)clientData)->openFile() ? ARCHIVE_OK : ARCHIVE_FATAL;
+    return ((Data*)clientData)->openFile() ? ARCHIVE_OK : ARCHIVE_FATAL;
   };
 
-  static auto fileReadCallback = [](struct archive *archiveRead, void *clientData, const void **buffer) {
+  static auto fileReadCallback = [](struct archive* archiveRead, void* clientData, const void** buffer) {
     (void)archiveRead;
     if (clientData == nullptr) {
       std::cerr << "fileReadCallback clientData nullptr" << std::endl;
       return la_ssize_t(0);
     }
 
-    return ((Data *)clientData)->readFile(buffer);
+    return ((Data*)clientData)->readFile(buffer);
   };
 
-  static auto fileSkipCallback = [](struct archive *archiveRead, void *clientData, la_int64_t request) {
+  static auto fileSkipCallback = [](struct archive* archiveRead, void* clientData, la_int64_t request) {
     (void)archiveRead;
     if (clientData == nullptr) {
       std::cerr << "fileSkipCallback clientData nullptr" << std::endl;
       return la_int64_t(-1);
     }
 
-    return ((Data *)clientData)->ignoreFile(request);
+    return ((Data*)clientData)->ignoreFile(request);
   };
 
-  static auto fileSwitchCallback = [](struct archive *archiveRead, void *clientData1, void *clientData2) {
+  static auto fileSwitchCallback = [](struct archive* archiveRead, void* clientData1, void* clientData2) {
     if (clientData1 != nullptr) {
-      ((Data *)clientData1)->closeFile();
+      ((Data*)clientData1)->closeFile();
     }
     if (clientData2 != nullptr) {
       return fileOpenCallback(archiveRead, clientData2);
@@ -196,7 +196,7 @@ int main(int argc, char *argv[]) {
     return ARCHIVE_OK;
   };
 
-  static auto fileCloseCallback = [](struct archive *archiveRead, void *clientData) {
+  static auto fileCloseCallback = [](struct archive* archiveRead, void* clientData) {
     if (clientData == nullptr) {
       std::cerr << "fileCloseCallback clientData nullptr" << std::endl;
       return ARCHIVE_FATAL;
@@ -205,7 +205,7 @@ int main(int argc, char *argv[]) {
     return fileSwitchCallback(archiveRead, clientData, nullptr);
   };
 
-  static auto fileSeekCallback = [](struct archive *archiveRead, void *clientData, la_int64_t offset, int whence) {
+  static auto fileSeekCallback = [](struct archive* archiveRead, void* clientData, la_int64_t offset, int whence) {
     (void)archiveRead;
     if (clientData == nullptr) {
       std::cerr << "fileSeekCallback clientData nullptr" << std::endl;
@@ -228,7 +228,7 @@ int main(int argc, char *argv[]) {
         break;
     }
 
-    return ((Data *)clientData)->seekFile(offset, dir);
+    return ((Data*)clientData)->seekFile(offset, dir);
   };
 
   auto archiveRead = archive_read_new();
@@ -258,7 +258,7 @@ int main(int argc, char *argv[]) {
       archiveWrite, ARCHIVE_EXTRACT_TIME | ARCHIVE_EXTRACT_PERM | ARCHIVE_EXTRACT_ACL | ARCHIVE_EXTRACT_FFLAGS);
   archive_write_disk_set_standard_lookup(archiveWrite);
 
-  struct archive_entry *entry = nullptr;
+  struct archive_entry* entry = nullptr;
   while (true) {
     ret = archive_read_next_header(archiveRead, &entry);
 

@@ -32,7 +32,7 @@ class ClientInterface {
 
 class Client final : public EsUtil::Stream::Server {
  public:
-  explicit Client(ClientId clientId, const std::shared_ptr<ClientInterface> &interface)
+  explicit Client(ClientId clientId, const std::shared_ptr<ClientInterface>& interface)
       : mClientId(clientId), mInterface(interface) {}
   virtual ~Client() {
     if (mInterface) {
@@ -48,18 +48,18 @@ class Client final : public EsUtil::Stream::Server {
 template <typename Result>
 class PublisherHelper final : public ClientInterface, public std::enable_shared_from_this<PublisherHelper<Result>> {
  public:
-  static std::shared_ptr<PublisherHelper<Result>> create(const std::shared_ptr<kj::TaskSet> &taskSet,
-                                                         const std::string &logName = "null") {
+  static std::shared_ptr<PublisherHelper<Result>> create(const std::shared_ptr<kj::TaskSet>& taskSet,
+                                                         const std::string& logName = "null") {
     return std::shared_ptr<PublisherHelper<Result>>(new PublisherHelper<Result>(taskSet, logName));
   }
 
-  PublisherHelper(const PublisherHelper &)            = delete;
-  PublisherHelper(PublisherHelper &&)                 = delete;
-  PublisherHelper &operator=(const PublisherHelper &) = delete;
-  PublisherHelper &operator=(PublisherHelper &&)      = delete;
+  PublisherHelper(const PublisherHelper&)            = delete;
+  PublisherHelper(PublisherHelper&&)                 = delete;
+  PublisherHelper& operator=(const PublisherHelper&) = delete;
+  PublisherHelper& operator=(PublisherHelper&&)      = delete;
 
   template <typename F>
-  bool setWorker(F &&func) {
+  bool setWorker(F&& func) {
     static_assert(std::is_invocable_v<F, std::stop_token>,
                   "Worker function must take std::stop_token as its first argument");
 
@@ -85,7 +85,7 @@ class PublisherHelper final : public ClientInterface, public std::enable_shared_
   }
 
   template <typename T>
-  void publish(T &&value) {
+  void publish(T&& value) {
     auto lock = mExecutor.lockExclusive();
     KJ_IF_MAYBE (exec, *lock) {
       if ((exec != nullptr) && (exec->isLive()) && mTaskSet) {
@@ -93,7 +93,7 @@ class PublisherHelper final : public ClientInterface, public std::enable_shared_
           Log::print("[server]PublisherHelper::publish try to executeSync (" + mLogName + ")");
           exec->executeSync([this, value = std::forward<T>(value), &logName = mLogName]() {
             Log::print("[server]PublisherHelper::publish start executeSync func (" + mLogName + ")");
-            for (auto &e : mClient) {
+            for (auto& e : mClient) {
               auto callback = std::make_unique<decltype(e.second->sendRequest())>(e.second->sendRequest());
               if (!callback) {
                 continue;
@@ -106,7 +106,7 @@ class PublisherHelper final : public ClientInterface, public std::enable_shared_
                           [logName]() {
                             Log::print("[server]PublisherHelper::publish callback.send() OK (" + logName + ")");
                           },
-                          [logName](kj::Exception &&e) {
+                          [logName](kj::Exception&& e) {
                             Log::print(std::string("[server]PublisherHelper::publish callback.send() Exception: ") +
                                        e.getDescription().cStr() + " (" + logName + ")");
                           })
@@ -114,10 +114,10 @@ class PublisherHelper final : public ClientInterface, public std::enable_shared_
             }
           });
           Log::print("[server]PublisherHelper::publish executeSync end (" + mLogName + ")");
-        } catch (const kj::Exception &e) {
+        } catch (const kj::Exception& e) {
           Log::print(std::string("[server]PublisherHelper::publish kj::Exception: ") + e.getDescription().cStr() +
                      " (" + mLogName + ")");
-        } catch (const std::exception &e) {
+        } catch (const std::exception& e) {
           Log::print(std::string("[server]PublisherHelper::publish std::exception: ") + e.what() + " (" + mLogName +
                      ")");
         } catch (...) {
@@ -147,14 +147,14 @@ class PublisherHelper final : public ClientInterface, public std::enable_shared_
   }
 
  private:
-  explicit PublisherHelper(const std::shared_ptr<kj::TaskSet> &taskSet, const std::string &logName)
+  explicit PublisherHelper(const std::shared_ptr<kj::TaskSet>& taskSet, const std::string& logName)
       : mTaskSet(taskSet), mLogName(logName) {}
 
   void disconnection(ClientId clientId) final { mClient.erase(clientId); }
 
   const std::shared_ptr<kj::TaskSet> mTaskSet;
   const std::string mLogName;
-  kj::MutexGuarded<kj::Maybe<const kj::Executor &>> mExecutor;
+  kj::MutexGuarded<kj::Maybe<const kj::Executor&>> mExecutor;
   std::jthread mWorkerThread;
   std::unordered_map<std::size_t, std::unique_ptr<typename EsUtil::Callback<Result>::Client>> mClient;
 };
