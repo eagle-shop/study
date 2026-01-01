@@ -7,7 +7,7 @@ target_include_directories(server
   PRIVATE
     ../log
     ${CapnProto_INCLUDE_DIRS}
-    ${generateHeaders}
+    ${CMAKE_BINARY_DIR}/capnproto/schemas
 )
 
 target_compile_features(server

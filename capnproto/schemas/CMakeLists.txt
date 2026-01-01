@@ -23,5 +23,3 @@ target_compile_features(schemas
 
 include(${CMAKE_SOURCE_DIR}/options.cmake)
 set_common_compile_options(schemas)
-
-set(generateHeaders ${CMAKE_CURRENT_BINARY_DIR} PARENT_SCOPE)

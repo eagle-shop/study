@@ -1,12 +1,25 @@
-// Copyright (c) 2024 eagle-shop
-
-#include <capnp/blob.h>
 #include <capnp/ez-rpc.h>
+#include <gtest/gtest.h>
 
+#include <memory>
 #include <string>
 
 #include "log.h"
+#include "server.h"
 #include "study.capnp.h"
+
+class StudyCapnpTest : public ::testing::Test {
+ protected:
+  static void SetUpTestSuite() { mStudyServer = std::make_unique<StudyServer>(); }
+  static void TearDownTestSuite() { mStudyServer.reset(); }
+
+  void SetUp() override {}
+  void TearDown() override {}
+
+  static std::unique_ptr<StudyServer> mStudyServer;
+};
+
+std::unique_ptr<StudyServer> StudyCapnpTest::mStudyServer;
 
 class CallbackX final : public EsUtil::Callback<capnp::Text>::Server {
  public:
@@ -60,7 +73,7 @@ class CallbackY final : public EsUtil::Callback<Result<Study::DailyNotification,
   uint64_t mCounter;
 };
 
-void clientMain() {
+TEST_F(StudyCapnpTest, wip) {
   Log::print("[client]start");
   const std::string sock(Study::SOCK.get().cStr());
   const std::string unixSock = "unix:" + sock;
