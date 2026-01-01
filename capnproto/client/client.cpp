@@ -12,7 +12,7 @@ class CallbackX final : public EsUtil::Callback<capnp::Text>::Server {
  public:
   explicit CallbackX(kj::Own<kj::PromiseFulfiller<void>> promiseFulfiller, uint64_t end = 3)
       : mPromiseFulfiller(kj::mv(promiseFulfiller)), mInitialValue(end), mCounter(end) {}
-  virtual ~CallbackX() = default;
+  ~CallbackX() = default;
 
  private:
   kj::Promise<void> send(SendContext context) final {
@@ -38,7 +38,7 @@ class CallbackY final : public EsUtil::Callback<Result<Study::DailyNotification,
  public:
   explicit CallbackY(kj::Own<kj::PromiseFulfiller<void>> promiseFulfiller, uint64_t end = 3)
       : mPromiseFulfiller(kj::mv(promiseFulfiller)), mInitialValue(end), mCounter(end) {}
-  virtual ~CallbackY() = default;
+  ~CallbackY() = default;
 
  private:
   kj::Promise<void> send(SendContext context) final {

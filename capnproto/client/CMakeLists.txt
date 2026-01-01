@@ -6,7 +6,7 @@ add_library(client client.cpp)
 target_include_directories(client
   PRIVATE
     ../log
-    ${CapnProto_DIR}/../../../include
+    ${CapnProto_INCLUDE_DIRS}
     ${generateHeaders}
 )
 

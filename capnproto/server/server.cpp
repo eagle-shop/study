@@ -218,7 +218,7 @@ kj::Promise<void> StudyServer::Server::subscribeX(SubscribeXContext context) {
       return kj::READY_NOW;
     }
 
-    if (!(*mPublisherX)) {
+    if (!mPublisherX->isWorkerRunning()) {
       auto ret = mPublisherX->setWorker([this](const std::atomic<bool>& stopFlag) {
         while (!stopFlag.load()) {
           mPublisherX->publish("send X");
@@ -256,7 +256,7 @@ kj::Promise<void> StudyServer::Server::subscribeY(SubscribeYContext context) {
       return kj::READY_NOW;
     }
 
-    if (!(*mPublisherY)) {
+    if (!mPublisherY->isWorkerRunning()) {
       auto ret = mPublisherY->setWorker([this](const std::atomic<bool>& stopFlag) {
         while (!stopFlag.load()) {
           capnp::MallocMessageBuilder resultMessageBuilder;

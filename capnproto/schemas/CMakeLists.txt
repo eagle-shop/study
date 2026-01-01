@@ -13,7 +13,7 @@ add_library(schemas
 
 target_include_directories(schemas
   PRIVATE
-    ${CapnProto_DIR}/../../../include
+    ${CapnProto_INCLUDE_DIRS}
 )
 
 target_compile_features(schemas

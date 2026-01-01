@@ -52,7 +52,7 @@ class StudyServer final {
   class Server final : public Study::Server, public kj::TaskSet::ErrorHandler {
    public:
     explicit Server(const std::weak_ptr<EzRpcServerInterface>& ezRpcServerInterface);
-    virtual ~Server();
+    ~Server();
 
     void clearTasks();
 

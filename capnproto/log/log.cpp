@@ -3,6 +3,7 @@
 #include "log.h"
 
 #include <chrono>
+#include <ctime>
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -11,7 +12,7 @@
 std::mutex Log::mMutex;
 
 void Log::print(const std::string& str) {
-  std::lock_guard<std::mutex> lock(mMutex);
+  const std::lock_guard<std::mutex> lock(mMutex);
   const auto now          = std::chrono::system_clock::now();
   const auto microseconds = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()) % 1000000;
   const auto time         = std::chrono::system_clock::to_time_t(now);
