@@ -10,6 +10,7 @@
 
 #include <atomic>
 #include <exception>
+#include <functional>
 #include <memory>
 #include <string>
 #include <thread>
@@ -32,8 +33,10 @@ template <typename Result>
 class PublisherHelper final : public std::enable_shared_from_this<PublisherHelper<Result>> {
  public:
   static std::shared_ptr<PublisherHelper<Result>> create(const std::shared_ptr<kj::TaskSet>& taskSet,
+                                                         std::function<kj::WaitScope&()>&& getWaitScopeFunc,
                                                          const std::string& logName = "null") {
-    return std::shared_ptr<PublisherHelper<Result>>(new PublisherHelper<Result>(taskSet, logName));
+    return std::shared_ptr<PublisherHelper<Result>>(
+        new PublisherHelper<Result>(taskSet, std::move(getWaitScopeFunc), logName));
   }
 
   PublisherHelper(const PublisherHelper&)            = delete;
@@ -49,9 +52,11 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
     bool ret = false;
 
     if (!mWorkerThread.joinable()) {
-      mExecutor     = kj::getCurrentThreadExecutor().addRef();
-      mWorkerThread = std::thread(std::forward<F>(func), std::cref(mStopFlag));
-      ret           = true;
+      mExecutor = kj::getCurrentThreadExecutor().addRef();
+      if (mExecutor) {
+        mWorkerThread = std::thread(std::forward<F>(func), std::cref(mStopFlag));
+        ret           = true;
+      }
     }
 
     return ret;
@@ -69,10 +74,10 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
 
   template <typename T>
   void publish(T&& value) {
-    if (mExecutor && (mExecutor->isLive()) && mTaskSet) {
+    if (!mStopFlag.load() && mExecutor && (mExecutor->isLive()) && mTaskSet) {
       try {
         Log::print("[server]PublisherHelper::publish try to executeSync (" + mLogName + ")");
-        mExecutor->executeSync([this, value = std::forward<T>(value), &logName = mLogName]() {
+        mExecutor->executeSync([this, value = std::forward<T>(value)]() {
           Log::print("[server]PublisherHelper::publish start executeSync func (" + mLogName + ")");
           for (auto& e : mClient) {
             auto callback = std::make_unique<decltype(e.second->sendRequest())>(e.second->sendRequest());
@@ -81,15 +86,32 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
             }
 
             callback->setValue(value);
+            mTaskCounter.fetch_add(1);
+            Log::print("[server]PublisherHelper::publish mTaskSet->add (" + mLogName +
+                       "), mTaskCounter: " + std::to_string(mTaskCounter.load()));
             mTaskSet->add(callback->send()
                               .then(
-                                  [logName]() {
-                                    Log::print("[server]PublisherHelper::publish callback.send() OK (" + logName + ")");
+                                  [this]() {
+                                    const auto taskCounter = mTaskCounter.fetch_sub(1);
+                                    Log::print("[server]PublisherHelper::publish callback.send() OK (" + mLogName +
+                                               "), mTaskCounter: " + std::to_string(taskCounter));
+                                    if (mStopFlag.load() && (taskCounter == 0)) {
+                                      if (mPromiseFulfillerPair.fulfiller) {
+                                        mPromiseFulfillerPair.fulfiller->fulfill();
+                                      }
+                                    }
                                   },
-                                  [logName](kj::Exception&& e) {
+                                  [this](kj::Exception&& e) {
+                                    const auto taskCounter = mTaskCounter.fetch_sub(1);
                                     Log::print(
                                         std::string("[server]PublisherHelper::publish callback.send() Exception: ") +
-                                        e.getDescription().cStr() + " (" + logName + ")");
+                                        e.getDescription().cStr() + " (" + mLogName +
+                                        "), mTaskCounter:" + std::to_string(taskCounter));
+                                    if (mStopFlag.load() && (taskCounter == 0)) {
+                                      if (mPromiseFulfillerPair.fulfiller) {
+                                        mPromiseFulfillerPair.fulfiller->fulfill();
+                                      }
+                                    }
                                   })
                               .attach(kj::mv(callback)));
           }
@@ -115,6 +137,9 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
   ~PublisherHelper() noexcept {
     if (mWorkerThread.joinable()) {
       mStopFlag.store(true);
+      if (mTaskCounter.load() > 0) {
+        mPromiseFulfillerPair.promise.wait(mGetWaitScopeFunc());
+      }
       Log::print("[server]PublisherHelper::~PublisherHelper try to join (" + mLogName + ")");
       mWorkerThread.join();
       Log::print("[server]PublisherHelper::~PublisherHelper end (" + mLogName + ")");
@@ -141,18 +166,28 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
     const std::string mLogName;
   };
 
-  explicit PublisherHelper(const std::shared_ptr<kj::TaskSet>& taskSet, const std::string& logName)
-      : mTaskSet(taskSet), mLogName(logName), mStopFlag(false), mNextClientId(0) {}
+  explicit PublisherHelper(const std::shared_ptr<kj::TaskSet>& taskSet,
+                           std::function<kj::WaitScope&()>&& getWaitScopeFunc, const std::string& logName)
+      : mTaskSet(taskSet),
+        mGetWaitScopeFunc(std::move(getWaitScopeFunc)),
+        mLogName(logName),
+        mStopFlag(false),
+        mNextClientId(0),
+        mTaskCounter(0),
+        mPromiseFulfillerPair(kj::newPromiseAndFulfiller<void>()) {}
 
   void disconnection(ClientId clientId) { mClient.erase(clientId); }
 
   const std::shared_ptr<kj::TaskSet> mTaskSet;
+  const std::function<kj::WaitScope&()> mGetWaitScopeFunc;
   const std::string mLogName;
   kj::Own<const kj::Executor> mExecutor;
   std::thread mWorkerThread;
   std::atomic<bool> mStopFlag;
   ClientId mNextClientId;
   std::unordered_map<std::size_t, std::unique_ptr<typename EsUtil::Callback<Result>::Client>> mClient;
+  std::atomic<uint64_t> mTaskCounter;
+  kj::PromiseFulfillerPair<void> mPromiseFulfillerPair;
 };
 
 }  // namespace cap

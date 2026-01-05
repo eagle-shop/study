@@ -94,28 +94,26 @@ StudyServer::~StudyServer() {
 
 StudyServer::EzRpcServerInterface::EzRpcServerInterface() : mStudyServer(nullptr) {}
 
-void StudyServer::EzRpcServerInterface::initialize(const std::weak_ptr<capnp::EzRpcServer>& ezRpcServer) {
+void StudyServer::EzRpcServerInterface::initialize(const std::shared_ptr<capnp::EzRpcServer>& ezRpcServer) {
   mEzRpcServer = ezRpcServer;
 }
 
 void StudyServer::EzRpcServerInterface::setStudyServer(StudyServer::Server* studyServer) { mStudyServer = studyServer; }
 
 kj::WaitScope& StudyServer::EzRpcServerInterface::getWaitScope() {
-  auto ins = mEzRpcServer.lock();
-  if (!ins) {
-    Log::printAndThrow("[server]EzRpcServer is null");
+  if (!mEzRpcServer) {
+    Log::printAndThrow("[server]getWaitScope EzRpcServer is null");
   }
 
-  return ins->getWaitScope();
+  return mEzRpcServer->getWaitScope();
 }
 
 kj::AsyncIoProvider& StudyServer::EzRpcServerInterface::getIoProvider() {
-  auto ins = mEzRpcServer.lock();
-  if (!ins) {
-    Log::printAndThrow("[server]EzRpcServer is null");
+  if (!mEzRpcServer) {
+    Log::printAndThrow("[server]getIoProvider EzRpcServer is null");
   }
 
-  return ins->getIoProvider();
+  return mEzRpcServer->getIoProvider();
 }
 
 void StudyServer::EzRpcServerInterface::clearTasks() {
@@ -126,16 +124,12 @@ void StudyServer::EzRpcServerInterface::clearTasks() {
   mStudyServer->clearTasks();
 }
 
-StudyServer::Server::Server(const std::weak_ptr<EzRpcServerInterface>& ezRpcServerInterface)
+StudyServer::Server::Server(const std::shared_ptr<EzRpcServerInterface>& ezRpcServerInterface)
     : mInterface(ezRpcServerInterface),
       mTaskSet(std::make_shared<kj::TaskSet>(*this)),
-      mPublisherX(es_util::cap::PublisherHelper<capnp::Text>::create(mTaskSet, "subscribeX")),
-      mPublisherY(es_util::cap::PublisherHelper<Result<Study::DailyNotification, Ng>>::create(mTaskSet, "subscribeY")) {
-  auto ins = mInterface.lock();
-  if (!ins) {
-    Log::printAndThrow("[server error]EzRpcServerInterface is null");
-  }
-}
+      mPublisherX(es_util::cap::PublisherHelper<capnp::Text>::create(mTaskSet, getWaitScopeFunc(), "subscribeX")),
+      mPublisherY(es_util::cap::PublisherHelper<Result<Study::DailyNotification, Ng>>::create(
+          mTaskSet, getWaitScopeFunc(), "subscribeY")) {}
 
 StudyServer::Server::~Server() { Log::print("[server]Server::~Server end"); }
 
@@ -143,10 +137,9 @@ void StudyServer::Server::clearTasks() {
   if (mTaskSet) {
     mTaskSet->clear();
 
-    auto ins = mInterface.lock();
-    if (ins) {
+    if (mInterface) {
       Log::print("[server]StudyServer::Server::clearTasks wait");
-      mTaskSet->onEmpty().wait(ins->getWaitScope());
+      mTaskSet->onEmpty().wait(mInterface->getWaitScope());
       Log::print("[server]StudyServer::Server::clearTasks OK");
     }
   }
@@ -280,4 +273,12 @@ kj::Promise<void> StudyServer::Server::subscribeY(SubscribeYContext context) {
 
 void StudyServer::Server::taskFailed(kj::Exception&& e) {
   Log::print(std::string("[server]taskFailed: ") + e.getDescription().cStr());
+}
+
+std::function<kj::WaitScope&()> StudyServer::Server::getWaitScopeFunc() {
+  if (!mInterface) {
+    Log::printAndThrow("[server error]EzRpcServerInterface is null");
+  }
+
+  return [this]() -> kj::WaitScope& { return mInterface->getWaitScope(); };
 }

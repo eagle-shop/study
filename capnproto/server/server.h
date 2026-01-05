@@ -37,7 +37,7 @@ class StudyServer final {
     EzRpcServerInterface& operator=(const EzRpcServerInterface&) = delete;
     EzRpcServerInterface& operator=(EzRpcServerInterface&&)      = delete;
 
-    void initialize(const std::weak_ptr<capnp::EzRpcServer>& ezRpcServer);
+    void initialize(const std::shared_ptr<capnp::EzRpcServer>& ezRpcServer);
 
     void setStudyServer(StudyServer::Server* studyServer);
     kj::WaitScope& getWaitScope();
@@ -45,13 +45,13 @@ class StudyServer final {
     void clearTasks();
 
    private:
-    std::weak_ptr<capnp::EzRpcServer> mEzRpcServer;
+    std::shared_ptr<capnp::EzRpcServer> mEzRpcServer;
     StudyServer::Server* mStudyServer;
   };
 
   class Server final : public Study::Server, public kj::TaskSet::ErrorHandler {
    public:
-    explicit Server(const std::weak_ptr<EzRpcServerInterface>& ezRpcServerInterface);
+    explicit Server(const std::shared_ptr<EzRpcServerInterface>& ezRpcServerInterface);
     ~Server();
 
     void clearTasks();
@@ -62,12 +62,13 @@ class StudyServer final {
     kj::Promise<void> subscribeX(SubscribeXContext context) final;
     kj::Promise<void> subscribeY(SubscribeYContext context) final;
     void taskFailed(kj::Exception&& e) final;
+    std::function<kj::WaitScope&()> getWaitScopeFunc();
 
     using UserId = uint64_t;
 
     struct UserData {};
 
-    const std::weak_ptr<EzRpcServerInterface> mInterface;
+    const std::shared_ptr<EzRpcServerInterface> mInterface;
     const std::shared_ptr<kj::TaskSet> mTaskSet;
     std::unordered_map<UserId, UserData> mUserDataList;
     std::unordered_map<std::size_t, std::unique_ptr<EsUtil::Callback<capnp::Text>::Client>> mClientX;
