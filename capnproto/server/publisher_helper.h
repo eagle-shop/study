@@ -51,18 +51,29 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
 
     bool ret = false;
 
-    if (!mWorkerThread.joinable()) {
-      mExecutor = kj::getCurrentThreadExecutor().addRef();
-      if (mExecutor) {
-        mWorkerThread = std::thread(std::forward<F>(func), std::cref(mStopFlag));
-        ret           = true;
+    if (mThreadId == std::this_thread::get_id()) {
+      if (!mWorkerThread.joinable()) {
+        mExecutor = kj::getCurrentThreadExecutor().addRef();
+        if (mExecutor) {
+          mWorkerThread = std::thread(std::forward<F>(func), std::cref(mStopFlag));
+          ret           = true;
+        }
+      } else {
+        Log::print("[server]PublisherHelper::setWorker NG (worker already running) (" + mLogName + ")");
       }
+    } else {
+      Log::print("[server]PublisherHelper::setWorker NG (thread id mismatch) (" + mLogName + ")");
     }
 
     return ret;
   }
 
   kj::Own<EsUtil::Stream::Server> addSubscriber(std::unique_ptr<typename EsUtil::Callback<Result>::Client> client) {
+    if (mThreadId != std::this_thread::get_id()) {
+      Log::print("[server]PublisherHelper::addSubscriber NG (thread id mismatch) (" + mLogName + ")");
+      return kj::Own<EsUtil::Stream::Server>();
+    }
+
     if (!mClient.emplace(mNextClientId, std::move(client)).second) {
       Log::print("[server]PublisherHelper::addSubscriber NG (" + mLogName + ")");
       return kj::Own<EsUtil::Stream::Server>();
@@ -74,7 +85,7 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
 
   template <typename T>
   void publish(T&& value) {
-    if (!mStopFlag.load() && mExecutor && (mExecutor->isLive()) && mTaskSet) {
+    if (!mStopFlag.load() && mExecutor && mExecutor->isLive() && mTaskSet) {
       try {
         Log::print("[server]PublisherHelper::publish try to executeSync (" + mLogName + ")");
         mExecutor->executeSync([this, value = std::forward<T>(value)]() {
@@ -86,28 +97,28 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
             }
 
             callback->setValue(value);
-            mTaskCounter.fetch_add(1);
+            mTaskCounter++;
             Log::print("[server]PublisherHelper::publish mTaskSet->add (" + mLogName +
-                       "), mTaskCounter: " + std::to_string(mTaskCounter.load()));
+                       "), mTaskCounter: " + std::to_string(mTaskCounter));
             mTaskSet->add(callback->send()
                               .then(
                                   [this]() {
-                                    const auto taskCounter = mTaskCounter.fetch_sub(1);
+                                    mTaskCounter--;
                                     Log::print("[server]PublisherHelper::publish callback.send() OK (" + mLogName +
-                                               "), mTaskCounter: " + std::to_string(taskCounter));
-                                    if (mStopFlag.load() && (taskCounter == 0)) {
+                                               "), mTaskCounter: " + std::to_string(mTaskCounter));
+                                    if (mStopFlag.load() && (mTaskCounter == 0)) {
                                       if (mPromiseFulfillerPair.fulfiller) {
                                         mPromiseFulfillerPair.fulfiller->fulfill();
                                       }
                                     }
                                   },
                                   [this](kj::Exception&& e) {
-                                    const auto taskCounter = mTaskCounter.fetch_sub(1);
+                                    mTaskCounter--;
                                     Log::print(
                                         std::string("[server]PublisherHelper::publish callback.send() Exception: ") +
                                         e.getDescription().cStr() + " (" + mLogName +
-                                        "), mTaskCounter:" + std::to_string(taskCounter));
-                                    if (mStopFlag.load() && (taskCounter == 0)) {
+                                        "), mTaskCounter:" + std::to_string(mTaskCounter));
+                                    if (mStopFlag.load() && (mTaskCounter == 0)) {
                                       if (mPromiseFulfillerPair.fulfiller) {
                                         mPromiseFulfillerPair.fulfiller->fulfill();
                                       }
@@ -137,8 +148,12 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
   ~PublisherHelper() noexcept {
     if (mWorkerThread.joinable()) {
       mStopFlag.store(true);
-      if (mTaskCounter.load() > 0) {
-        mPromiseFulfillerPair.promise.wait(mGetWaitScopeFunc());
+      if (mTaskCounter > 0) {
+        if (mThreadId == std::this_thread::get_id()) {
+          mPromiseFulfillerPair.promise.wait(mGetWaitScopeFunc());
+        } else {
+          Log::print("[server]PublisherHelper::~PublisherHelper NG (thread id mismatch) (" + mLogName + ")");
+        }
       }
       Log::print("[server]PublisherHelper::~PublisherHelper try to join (" + mLogName + ")");
       mWorkerThread.join();
@@ -171,6 +186,7 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
       : mTaskSet(taskSet),
         mGetWaitScopeFunc(std::move(getWaitScopeFunc)),
         mLogName(logName),
+        mThreadId(std::this_thread::get_id()),
         mStopFlag(false),
         mNextClientId(0),
         mTaskCounter(0),
@@ -181,12 +197,13 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
   const std::shared_ptr<kj::TaskSet> mTaskSet;
   const std::function<kj::WaitScope&()> mGetWaitScopeFunc;
   const std::string mLogName;
+  const std::thread::id mThreadId;
   kj::Own<const kj::Executor> mExecutor;
   std::thread mWorkerThread;
   std::atomic<bool> mStopFlag;
   ClientId mNextClientId;
   std::unordered_map<std::size_t, std::unique_ptr<typename EsUtil::Callback<Result>::Client>> mClient;
-  std::atomic<uint64_t> mTaskCounter;
+  uint64_t mTaskCounter;
   kj::PromiseFulfillerPair<void> mPromiseFulfillerPair;
 };
 
