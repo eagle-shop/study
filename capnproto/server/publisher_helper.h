@@ -55,8 +55,17 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
       if (!mWorkerThread.joinable()) {
         mExecutor = kj::getCurrentThreadExecutor().addRef();
         if (mExecutor) {
-          mWorkerThread = std::thread(std::forward<F>(func), std::cref(mStopFlag));
-          ret           = true;
+          mWorkerThread = std::thread(
+              [this, func = std::forward<F>(func)](const std::atomic<bool>& stopFlag) mutable {
+                func(stopFlag);
+                mExecutor->executeSync([this] {
+                  if (mEndPair.fulfiller) {
+                    mEndPair.fulfiller->fulfill();
+                  }
+                });
+              },
+              std::cref(mStopFlag));
+          ret = true;
         }
       } else {
         Log::print("[server]PublisherHelper::setWorker NG (worker already running) (" + mLogName + ")");
@@ -66,6 +75,30 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
     }
 
     return ret;
+  }
+
+  void stopWorker() {
+    Log::print("[server]PublisherHelper::stopWorker start (" + mLogName + ")");
+    if (mWorkerThread.joinable()) {
+      mStopFlag.store(true);
+      Log::print("[server]PublisherHelper::stopWorker stopFlag: true (" + mLogName + ")");
+      if (mTaskCounter > 0) {
+        if (mThreadId == std::this_thread::get_id()) {
+          Log::print("[server]PublisherHelper::stopWorker mTaskCounter: " + std::to_string(mTaskCounter) + " (" +
+                     mLogName + ")");
+          mCleanupPair.promise.wait(mGetWaitScopeFunc());
+        } else {
+          Log::print("[server]PublisherHelper::stopWorker NG (thread id mismatch) (" + mLogName + ")");
+        }
+      }
+      Log::print("[server]PublisherHelper::stopWorker wait (" + mLogName + ")");
+      mEndPair.promise.wait(mGetWaitScopeFunc());
+      Log::print("[server]PublisherHelper::stopWorker try to join (" + mLogName + ")");
+      mWorkerThread.join();
+      Log::print("[server]PublisherHelper::stopWorker end (" + mLogName + ")");
+    } else {
+      Log::print("[server]PublisherHelper::stopWorker NG (worker not running) (" + mLogName + ")");
+    }
   }
 
   kj::Own<EsUtil::Stream::Server> addSubscriber(std::unique_ptr<typename EsUtil::Callback<Result>::Client> client) {
@@ -85,6 +118,7 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
 
   template <typename T>
   void publish(T&& value) {
+    Log::print("[server]PublisherHelper::publish start (" + mLogName + ")");
     if (!mStopFlag.load() && mExecutor && mExecutor->isLive() && mTaskSet) {
       try {
         Log::print("[server]PublisherHelper::publish try to executeSync (" + mLogName + ")");
@@ -107,8 +141,8 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
                                     Log::print("[server]PublisherHelper::publish callback.send() OK (" + mLogName +
                                                "), mTaskCounter: " + std::to_string(mTaskCounter));
                                     if (mStopFlag.load() && (mTaskCounter == 0)) {
-                                      if (mPromiseFulfillerPair.fulfiller) {
-                                        mPromiseFulfillerPair.fulfiller->fulfill();
+                                      if (mCleanupPair.fulfiller) {
+                                        mCleanupPair.fulfiller->fulfill();
                                       }
                                     }
                                   },
@@ -119,13 +153,14 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
                                         e.getDescription().cStr() + " (" + mLogName +
                                         "), mTaskCounter:" + std::to_string(mTaskCounter));
                                     if (mStopFlag.load() && (mTaskCounter == 0)) {
-                                      if (mPromiseFulfillerPair.fulfiller) {
-                                        mPromiseFulfillerPair.fulfiller->fulfill();
+                                      if (mCleanupPair.fulfiller) {
+                                        mCleanupPair.fulfiller->fulfill();
                                       }
                                     }
                                   })
                               .attach(kj::mv(callback)));
           }
+          Log::print("[server]PublisherHelper::publish end executeSync func (" + mLogName + ")");
         });
         Log::print("[server]PublisherHelper::publish executeSync end (" + mLogName + ")");
       } catch (const kj::Exception& e) {
@@ -145,21 +180,7 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
 
   bool isWorkerRunning() const { return mWorkerThread.joinable(); }
 
-  ~PublisherHelper() noexcept {
-    if (mWorkerThread.joinable()) {
-      mStopFlag.store(true);
-      if (mTaskCounter > 0) {
-        if (mThreadId == std::this_thread::get_id()) {
-          mPromiseFulfillerPair.promise.wait(mGetWaitScopeFunc());
-        } else {
-          Log::print("[server]PublisherHelper::~PublisherHelper NG (thread id mismatch) (" + mLogName + ")");
-        }
-      }
-      Log::print("[server]PublisherHelper::~PublisherHelper try to join (" + mLogName + ")");
-      mWorkerThread.join();
-      Log::print("[server]PublisherHelper::~PublisherHelper end (" + mLogName + ")");
-    }
-  }
+  ~PublisherHelper() noexcept { Log::print("[server]PublisherHelper::~PublisherHelper (" + mLogName + ")"); }
 
  private:
   using ClientId = std::size_t;
@@ -190,7 +211,10 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
         mStopFlag(false),
         mNextClientId(0),
         mTaskCounter(0),
-        mPromiseFulfillerPair(kj::newPromiseAndFulfiller<void>()) {}
+        mCleanupPair(kj::newPromiseAndFulfiller<void>()),
+        mEndPair(kj::newPromiseAndFulfiller<void>()) {
+    Log::print("[server]PublisherHelper::PublisherHelper (" + mLogName + ")");
+  }
 
   void disconnection(ClientId clientId) { mClient.erase(clientId); }
 
@@ -204,7 +228,8 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
   ClientId mNextClientId;
   std::unordered_map<std::size_t, std::unique_ptr<typename EsUtil::Callback<Result>::Client>> mClient;
   uint64_t mTaskCounter;
-  kj::PromiseFulfillerPair<void> mPromiseFulfillerPair;
+  kj::PromiseFulfillerPair<void> mCleanupPair;
+  kj::PromiseFulfillerPair<void> mEndPair;
 };
 
 }  // namespace cap

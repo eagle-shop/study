@@ -30,22 +30,22 @@ class StudyServer final {
   class EzRpcServerInterface final {
    public:
     EzRpcServerInterface();
-    ~EzRpcServerInterface() = default;
+    ~EzRpcServerInterface();
 
     EzRpcServerInterface(const EzRpcServerInterface&)            = delete;
     EzRpcServerInterface(EzRpcServerInterface&&)                 = delete;
     EzRpcServerInterface& operator=(const EzRpcServerInterface&) = delete;
     EzRpcServerInterface& operator=(EzRpcServerInterface&&)      = delete;
 
-    void initialize(const std::shared_ptr<capnp::EzRpcServer>& ezRpcServer);
+    void initialize(const std::weak_ptr<capnp::EzRpcServer>& ezRpcServer);
 
     void setStudyServer(StudyServer::Server* studyServer);
     kj::WaitScope& getWaitScope();
     kj::AsyncIoProvider& getIoProvider();
-    void clearTasks();
+    void cleanup();
 
    private:
-    std::shared_ptr<capnp::EzRpcServer> mEzRpcServer;
+    std::weak_ptr<capnp::EzRpcServer> mEzRpcServer;
     StudyServer::Server* mStudyServer;
   };
 
@@ -54,7 +54,7 @@ class StudyServer final {
     explicit Server(const std::shared_ptr<EzRpcServerInterface>& ezRpcServerInterface);
     ~Server();
 
-    void clearTasks();
+    void cleanup();
 
    private:
     kj::Promise<void> createUserId(CreateUserIdContext context) final;
@@ -73,12 +73,12 @@ class StudyServer final {
     std::unordered_map<UserId, UserData> mUserDataList;
     std::unordered_map<std::size_t, std::unique_ptr<EsUtil::Callback<capnp::Text>::Client>> mClientX;
     std::mutex mMutex;
-    const std::shared_ptr<es_util::cap::PublisherHelper<capnp::Text>> mPublisherX;
-    const std::shared_ptr<es_util::cap::PublisherHelper<Result<Study::DailyNotification, Ng>>> mPublisherY;
+    std::shared_ptr<es_util::cap::PublisherHelper<capnp::Text>> mPublisherX;
+    std::shared_ptr<es_util::cap::PublisherHelper<Result<Study::DailyNotification, Ng>>> mPublisherY;
   };
 
   std::thread mMainThread;
-  std::shared_ptr<kj::PromiseFulfillerPair<void>> mPromiseFulfillerPair;
+  std::unique_ptr<kj::PromiseFulfillerPair<void>> mPromiseFulfillerPair;
   kj::Own<const kj::Executor> mExecutor;
 };
 

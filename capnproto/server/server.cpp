@@ -7,8 +7,6 @@
 
 #include <filesystem>
 #include <future>
-#include <memory>
-#include <mutex>
 #include <string>
 #include <utility>
 
@@ -44,7 +42,7 @@ StudyServer::StudyServer() {
 
         ezRpcServerInterface->initialize(ezRpcServer);
         ezRpcServer->getPort().wait(ezRpcServer->getWaitScope());
-        mPromiseFulfillerPair = std::make_shared<kj::PromiseFulfillerPair<void>>(kj::newPromiseAndFulfiller<void>());
+        mPromiseFulfillerPair = std::make_unique<kj::PromiseFulfillerPair<void>>(kj::newPromiseAndFulfiller<void>());
         if (!mPromiseFulfillerPair) {
           Log::printAndThrow("[server error]could not create PromiseFulfillerPair object");
         }
@@ -57,7 +55,7 @@ StudyServer::StudyServer() {
           mPromiseFulfillerPair->promise.wait(ezRpcServer->getWaitScope());
 
           Log::print("[server]main fulfill");
-          ezRpcServerInterface->clearTasks();
+          ezRpcServerInterface->cleanup();
           Log::print("[server]main loop end");
         } catch (const kj::Exception& e) {
           Log::print(std::string("[server error]main loop kj::Exception: ") + e.getDescription().cStr());
@@ -94,34 +92,41 @@ StudyServer::~StudyServer() {
 
 StudyServer::EzRpcServerInterface::EzRpcServerInterface() : mStudyServer(nullptr) {}
 
-void StudyServer::EzRpcServerInterface::initialize(const std::shared_ptr<capnp::EzRpcServer>& ezRpcServer) {
+StudyServer::EzRpcServerInterface::~EzRpcServerInterface() {
+  Log::print("[server]EzRpcServerInterface::~EzRpcServerInterface");
+}
+
+void StudyServer::EzRpcServerInterface::initialize(const std::weak_ptr<capnp::EzRpcServer>& ezRpcServer) {
   mEzRpcServer = ezRpcServer;
 }
 
 void StudyServer::EzRpcServerInterface::setStudyServer(StudyServer::Server* studyServer) { mStudyServer = studyServer; }
 
 kj::WaitScope& StudyServer::EzRpcServerInterface::getWaitScope() {
-  if (!mEzRpcServer) {
-    Log::printAndThrow("[server]getWaitScope EzRpcServer is null");
+  const auto ins = mEzRpcServer.lock();
+  if (!ins) {
+    Log::printAndThrow("[server error]getWaitScope EzRpcServer is null");
   }
 
-  return mEzRpcServer->getWaitScope();
+  return ins->getWaitScope();
 }
 
 kj::AsyncIoProvider& StudyServer::EzRpcServerInterface::getIoProvider() {
-  if (!mEzRpcServer) {
-    Log::printAndThrow("[server]getIoProvider EzRpcServer is null");
+  const auto ins = mEzRpcServer.lock();
+  if (!ins) {
+    Log::printAndThrow("[server error]getIoProvider EzRpcServer is null");
   }
 
-  return mEzRpcServer->getIoProvider();
+  return ins->getIoProvider();
 }
 
-void StudyServer::EzRpcServerInterface::clearTasks() {
+void StudyServer::EzRpcServerInterface::cleanup() {
   if (mStudyServer == nullptr) {
     return;
   }
 
-  mStudyServer->clearTasks();
+  mStudyServer->cleanup();
+  mStudyServer = nullptr;
 }
 
 StudyServer::Server::Server(const std::shared_ptr<EzRpcServerInterface>& ezRpcServerInterface)
@@ -129,19 +134,26 @@ StudyServer::Server::Server(const std::shared_ptr<EzRpcServerInterface>& ezRpcSe
       mTaskSet(std::make_shared<kj::TaskSet>(*this)),
       mPublisherX(es_util::cap::PublisherHelper<capnp::Text>::create(mTaskSet, getWaitScopeFunc(), "subscribeX")),
       mPublisherY(es_util::cap::PublisherHelper<Result<Study::DailyNotification, Ng>>::create(
-          mTaskSet, getWaitScopeFunc(), "subscribeY")) {}
+          mTaskSet, getWaitScopeFunc(), "subscribeY")) {
+  Log::print("[server]Server::Server");
+}
 
-StudyServer::Server::~Server() { Log::print("[server]Server::~Server end"); }
+StudyServer::Server::~Server() { Log::print("[server]Server::~Server"); }
 
-void StudyServer::Server::clearTasks() {
-  if (mTaskSet) {
-    mTaskSet->clear();
-
-    if (mInterface) {
-      Log::print("[server]StudyServer::Server::clearTasks wait");
-      mTaskSet->onEmpty().wait(mInterface->getWaitScope());
-      Log::print("[server]StudyServer::Server::clearTasks OK");
-    }
+void StudyServer::Server::cleanup() {
+  Log::print("[server]StudyServer::Server::cleanup start");
+  mPublisherX->stopWorker();
+  Log::print("[server]StudyServer::Server::cleanup mPublisherX stopWorker end");
+  mPublisherX.reset();
+  Log::print("[server]StudyServer::Server::cleanup mPublisherX reset end");
+  mPublisherY->stopWorker();
+  Log::print("[server]StudyServer::Server::cleanup mPublisherY stopWorker end");
+  mPublisherY.reset();
+  Log::print("[server]StudyServer::Server::cleanup mPublisherY reset end");
+  if (mTaskSet && mInterface) {
+    Log::print("[server]StudyServer::Server::cleanup wait");
+    mTaskSet->onEmpty().wait(mInterface->getWaitScope());
+    Log::print("[server]StudyServer::Server::cleanup OK");
   }
 }
 
@@ -150,7 +162,7 @@ kj::Promise<void> StudyServer::Server::createUserId(CreateUserIdContext context)
 
   return es_util::cap::AsyncHelper::executeAsync(
       [this]() {
-        std::lock_guard<std::mutex> lock(mMutex);
+        const std::lock_guard<std::mutex> lock(mMutex);
         auto ret = mUserDataList.emplace(mUserDataList.size(), UserData{});
         return ret.second ? std::optional<UserId>(mUserDataList.size() - 1) : std::nullopt;
       },
@@ -165,6 +177,8 @@ kj::Promise<void> StudyServer::Server::createUserId(CreateUserIdContext context)
 }
 
 kj::Promise<void> StudyServer::Server::deleteUserId(DeleteUserIdContext context) {
+  Log::print("[server]deleteUserId start");
+
   if (!context.getParams().hasUserId()) {
     context.getResults().initResult().initError().setMessage("deleteUserId id is null");
     return kj::READY_NOW;
@@ -174,7 +188,7 @@ kj::Promise<void> StudyServer::Server::deleteUserId(DeleteUserIdContext context)
 
   return es_util::cap::AsyncHelper::executeAsync(
       [this, id = context.getParams().getUserId().getId()]() {
-        std::lock_guard<std::mutex> lock(mMutex);
+        const std::lock_guard<std::mutex> lock(mMutex);
         if (mUserDataList.count(id) > 0) {
           mUserDataList.erase(id);
           return true;
@@ -193,6 +207,8 @@ kj::Promise<void> StudyServer::Server::deleteUserId(DeleteUserIdContext context)
 }
 
 kj::Promise<void> StudyServer::Server::subscribeX(SubscribeXContext context) {
+  Log::print("[server]subscribeX start");
+
   if (!context.getParams().hasCallback()) {
     context.getResults().initResult().initError().setMessage("hasCallback is false");
     return kj::READY_NOW;
@@ -214,8 +230,11 @@ kj::Promise<void> StudyServer::Server::subscribeX(SubscribeXContext context) {
     if (!mPublisherX->isWorkerRunning()) {
       auto ret = mPublisherX->setWorker([this](const std::atomic<bool>& stopFlag) {
         while (!stopFlag.load()) {
+          Log::print("[server]subscribeX worker try publish");
           mPublisherX->publish("send X");
+          Log::print("[server]subscribeX worker end publish");
         }
+        Log::print("[server]subscribeX worker thread end");
       });
 
       if (!ret) {
@@ -230,6 +249,8 @@ kj::Promise<void> StudyServer::Server::subscribeX(SubscribeXContext context) {
 }
 
 kj::Promise<void> StudyServer::Server::subscribeY(SubscribeYContext context) {
+  Log::print("[server]subscribeY start");
+
   if (!context.getParams().hasCallback()) {
     context.getResults().initResult().initError().setMessage("hasCallback is false");
     return kj::READY_NOW;
@@ -256,8 +277,11 @@ kj::Promise<void> StudyServer::Server::subscribeY(SubscribeYContext context) {
           auto result = resultMessageBuilder.initRoot<Result<Study::DailyNotification, Ng>>();
           result.initValue().initDate().setIso8601("2000-01-01T00:00:00Z");
           result.getValue().setDmy("send Y");
+          Log::print("[server]subscribeY worker try publish");
           mPublisherY->publish(kj::mv(result));
+          Log::print("[server]subscribeY worker end publish");
         }
+        Log::print("[server]subscribeY worker thread end");
       });
 
       if (!ret) {
@@ -276,9 +300,12 @@ void StudyServer::Server::taskFailed(kj::Exception&& e) {
 }
 
 std::function<kj::WaitScope&()> StudyServer::Server::getWaitScopeFunc() {
-  if (!mInterface) {
-    Log::printAndThrow("[server error]EzRpcServerInterface is null");
-  }
-
-  return [this]() -> kj::WaitScope& { return mInterface->getWaitScope(); };
+  const std::weak_ptr<EzRpcServerInterface> interface = mInterface;
+  return [interface]() -> kj::WaitScope& {
+    const auto ins = interface.lock();
+    if (!ins) {
+      Log::printAndThrow("[server error]EzRpcServerInterface is null");
+    }
+    return ins->getWaitScope();
+  };
 }
