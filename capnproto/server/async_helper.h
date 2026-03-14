@@ -13,6 +13,7 @@
 #include <thread>
 #include <utility>
 
+#include "cap_constant.h"
 #include "log.h"
 
 namespace es_util {
@@ -26,18 +27,26 @@ class AsyncHelper {
       using T = decltype(doWorkerFunc());
       auto promiseAndCrossThreadFulfiller =
           std::make_shared<kj::PromiseCrossThreadFulfillerPair<T>>(kj::newPromiseAndCrossThreadFulfiller<T>());
-      if (promiseAndCrossThreadFulfiller) {
+      auto executor            = kj::getCurrentThreadExecutor().addRef();
+      auto promiseAndFulfiller = kj::newPromiseAndFulfiller<void>();
+
+      if (promiseAndCrossThreadFulfiller && promiseAndCrossThreadFulfiller->fulfiller) {
         std::thread thread([func = std::forward<DoWorker>(doWorkerFunc), promiseAndCrossThreadFulfiller]() {
           try {
-            if (promiseAndCrossThreadFulfiller && promiseAndCrossThreadFulfiller->fulfiller) {
-              promiseAndCrossThreadFulfiller->fulfiller->fulfill(func());
-            }
+            promiseAndCrossThreadFulfiller->fulfiller->fulfill(func());
           } catch (const kj::Exception& e) {
-            Log::print(std::string("[AsyncHelper][Async Thread]error kj::Exception: ") + e.getDescription().cStr());
+            Log::print(std::string("[AsyncHelper][Async Thread]error kj::Exception: ") + e.getDescription().cStr(),
+                       es::LOG_FILE);
+            promiseAndCrossThreadFulfiller->fulfiller->reject(
+                KJ_EXCEPTION(FAILED, "[AsyncHelper][Async Thread]catch kj::Exception"));
           } catch (const std::exception& e) {
-            Log::print(std::string("[AsyncHelper][Async Thread]error std::exception: ") + e.what());
+            Log::print(std::string("[AsyncHelper][Async Thread]error std::exception: ") + e.what(), es::LOG_FILE);
+            promiseAndCrossThreadFulfiller->fulfiller->reject(
+                KJ_EXCEPTION(FAILED, "[AsyncHelper][Async Thread]catch std::exception"));
           } catch (...) {
-            Log::print("[AsyncHelper][Async Thread]error unknown exception");
+            Log::print("[AsyncHelper][Async Thread]error unknown exception", es::LOG_FILE);
+            promiseAndCrossThreadFulfiller->fulfiller->reject(
+                KJ_EXCEPTION(FAILED, "[AsyncHelper][Async Thread]catch unknown exception"));
           }
         });
         return promiseAndCrossThreadFulfiller->promise
@@ -47,17 +56,18 @@ class AsyncHelper {
             })
             .attach(std::move(promiseAndCrossThreadFulfiller));
       } else {
+        Log::print("[AsyncHelper][Async Thread]error promiseAndCrossThreadFulfiller is null", es::LOG_FILE);
         doMainFunc(std::nullopt);
         return kj::READY_NOW;
       }
     } catch (const kj::Exception& e) {
-      Log::print(std::string("[AsyncHelper]error kj::Exception: ") + e.getDescription().cStr());
+      Log::print(std::string("[AsyncHelper]error kj::Exception: ") + e.getDescription().cStr(), es::LOG_FILE);
       return kj::READY_NOW;
     } catch (const std::exception& e) {
-      Log::print(std::string("[AsyncHelper]error std::exception: ") + e.what());
+      Log::print(std::string("[AsyncHelper]error std::exception: ") + e.what(), es::LOG_FILE);
       return kj::READY_NOW;
     } catch (...) {
-      Log::print("[AsyncHelper]error unknown exception");
+      Log::print("[AsyncHelper]error unknown exception", es::LOG_FILE);
       return kj::READY_NOW;
     }
   }

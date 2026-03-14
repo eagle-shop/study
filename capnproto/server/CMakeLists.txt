@@ -6,6 +6,7 @@ add_library(server server.cpp)
 target_include_directories(server
   PRIVATE
     ../log
+    ../constant
     ${CapnProto_INCLUDE_DIRS}
     ${CMAKE_BINARY_DIR}/capnproto/schemas
 )

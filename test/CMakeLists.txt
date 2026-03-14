@@ -15,6 +15,7 @@ target_include_directories(Test
     ${CMAKE_SOURCE_DIR}/capnproto/server
     ${CMAKE_SOURCE_DIR}/capnproto/log
     ${CMAKE_BINARY_DIR}/capnproto/schemas
+    ${CMAKE_SOURCE_DIR}/capnproto/constant
 )
 
 target_compile_features(Test

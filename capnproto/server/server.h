@@ -78,7 +78,7 @@ class StudyServer final {
   };
 
   std::thread mMainThread;
-  std::unique_ptr<kj::PromiseFulfillerPair<void>> mPromiseFulfillerPair;
+  kj::Own<kj::PromiseFulfiller<void>> mPromiseFulfiller;
   kj::Own<const kj::Executor> mExecutor;
 };
 

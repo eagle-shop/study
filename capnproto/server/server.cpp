@@ -13,7 +13,11 @@
 #include "async_helper.h"
 #include "log.h"
 
+using namespace es;
+using namespace es_util;
+
 StudyServer::StudyServer() {
+  Log::print("[server]StudyServer::StudyServer start", LOG_FILE);
   std::promise<void> setUpPromise;
   const auto setUpFuture = setUpPromise.get_future();
 
@@ -26,43 +30,44 @@ StudyServer::StudyServer() {
 
         const auto ezRpcServerInterface = std::make_shared<EzRpcServerInterface>();
         if (!ezRpcServerInterface) {
-          Log::printAndThrow("[server error]could not create EzRpcServerInterface object");
+          Log::printAndThrow("[server error]could not create EzRpcServerInterface object", LOG_FILE);
         }
 
         auto server = kj::heap<Server>(ezRpcServerInterface);
         if (!server) {
-          Log::printAndThrow("[server error]could not create Server object");
+          Log::printAndThrow("[server error]could not create Server object", LOG_FILE);
         }
 
         ezRpcServerInterface->setStudyServer(server.get());
         const auto ezRpcServer = std::make_shared<capnp::EzRpcServer>(kj::mv(server), unixSock.c_str());
         if (!ezRpcServer) {
-          Log::printAndThrow("[server error]could not create EzRpcServer object");
+          Log::printAndThrow("[server error]could not create EzRpcServer object", LOG_FILE);
         }
 
         ezRpcServerInterface->initialize(ezRpcServer);
         ezRpcServer->getPort().wait(ezRpcServer->getWaitScope());
-        mPromiseFulfillerPair = std::make_unique<kj::PromiseFulfillerPair<void>>(kj::newPromiseAndFulfiller<void>());
-        if (!mPromiseFulfillerPair) {
-          Log::printAndThrow("[server error]could not create PromiseFulfillerPair object");
+        auto promiseAndFulfiller = kj::newPromiseAndFulfiller<void>();
+        mPromiseFulfiller        = kj::mv(promiseAndFulfiller.fulfiller);
+        if (!mPromiseFulfiller) {
+          Log::printAndThrow("[server error]could not create PromiseFulfiller object", LOG_FILE);
         }
 
         mExecutor = kj::getCurrentThreadExecutor().addRef();
-        Log::print("[server]main loop start");
+        Log::print("[server]main loop start", LOG_FILE);
         setUpPromise.set_value();
 
         try {
-          mPromiseFulfillerPair->promise.wait(ezRpcServer->getWaitScope());
+          promiseAndFulfiller.promise.wait(ezRpcServer->getWaitScope());
 
-          Log::print("[server]main fulfill");
+          Log::print("[server]main fulfill", LOG_FILE);
           ezRpcServerInterface->cleanup();
-          Log::print("[server]main loop end");
+          Log::print("[server]main loop end", LOG_FILE);
         } catch (const kj::Exception& e) {
-          Log::print(std::string("[server error]main loop kj::Exception: ") + e.getDescription().cStr());
+          Log::print(std::string("[server error]main loop kj::Exception: ") + e.getDescription().cStr(), LOG_FILE);
         } catch (const std::exception& e) {
-          Log::print(std::string("[server error]main loop std::exception: ") + e.what());
+          Log::print(std::string("[server error]main loop std::exception: ") + e.what(), LOG_FILE);
         } catch (...) {
-          Log::print("[server error]main loop unknouwn exception");
+          Log::print("[server error]main loop unknouwn exception", LOG_FILE);
         }
       },
       std::move(setUpPromise));
@@ -72,28 +77,28 @@ StudyServer::StudyServer() {
 
 StudyServer::~StudyServer() {
   if ((mExecutor) && mExecutor->isLive()) {
-    Log::print("[server]StudyServer::~StudyServer try to executeSync");
+    Log::print("[server]StudyServer::~StudyServer try to executeSync", LOG_FILE);
     mExecutor->executeSync([this]() {
-      if (mPromiseFulfillerPair && mPromiseFulfillerPair->fulfiller) {
-        mPromiseFulfillerPair->fulfiller->fulfill();
+      if (mPromiseFulfiller) {
+        mPromiseFulfiller->fulfill();
       }
     });
-    Log::print("[server]StudyServer::~StudyServer executeSync end");
+    Log::print("[server]StudyServer::~StudyServer executeSync end", LOG_FILE);
   } else {
-    Log::print("[server]StudyServer::~StudyServer executor is null");
+    Log::print("[server]StudyServer::~StudyServer executor is null", LOG_FILE);
   }
 
   if (mMainThread.joinable()) {
-    Log::print("[server]StudyServer::~StudyServer try to join");
+    Log::print("[server]StudyServer::~StudyServer try to join", LOG_FILE);
     mMainThread.join();
   }
-  Log::print("[server]StudyServer::~StudyServer end");
+  Log::print("[server]StudyServer::~StudyServer end", LOG_FILE);
 }
 
 StudyServer::EzRpcServerInterface::EzRpcServerInterface() : mStudyServer(nullptr) {}
 
 StudyServer::EzRpcServerInterface::~EzRpcServerInterface() {
-  Log::print("[server]EzRpcServerInterface::~EzRpcServerInterface");
+  Log::print("[server]EzRpcServerInterface::~EzRpcServerInterface", LOG_FILE);
 }
 
 void StudyServer::EzRpcServerInterface::initialize(const std::weak_ptr<capnp::EzRpcServer>& ezRpcServer) {
@@ -105,7 +110,7 @@ void StudyServer::EzRpcServerInterface::setStudyServer(StudyServer::Server* stud
 kj::WaitScope& StudyServer::EzRpcServerInterface::getWaitScope() {
   const auto ins = mEzRpcServer.lock();
   if (!ins) {
-    Log::printAndThrow("[server error]getWaitScope EzRpcServer is null");
+    Log::printAndThrow("[server error]getWaitScope EzRpcServer is null", LOG_FILE);
   }
 
   return ins->getWaitScope();
@@ -114,7 +119,7 @@ kj::WaitScope& StudyServer::EzRpcServerInterface::getWaitScope() {
 kj::AsyncIoProvider& StudyServer::EzRpcServerInterface::getIoProvider() {
   const auto ins = mEzRpcServer.lock();
   if (!ins) {
-    Log::printAndThrow("[server error]getIoProvider EzRpcServer is null");
+    Log::printAndThrow("[server error]getIoProvider EzRpcServer is null", LOG_FILE);
   }
 
   return ins->getIoProvider();
@@ -132,35 +137,35 @@ void StudyServer::EzRpcServerInterface::cleanup() {
 StudyServer::Server::Server(const std::shared_ptr<EzRpcServerInterface>& ezRpcServerInterface)
     : mInterface(ezRpcServerInterface),
       mTaskSet(std::make_shared<kj::TaskSet>(*this)),
-      mPublisherX(es_util::cap::PublisherHelper<capnp::Text>::create(mTaskSet, getWaitScopeFunc(), "subscribeX")),
-      mPublisherY(es_util::cap::PublisherHelper<Result<Study::DailyNotification, Ng>>::create(
-          mTaskSet, getWaitScopeFunc(), "subscribeY")) {
-  Log::print("[server]Server::Server");
+      mPublisherX(cap::PublisherHelper<capnp::Text>::create(mTaskSet, getWaitScopeFunc(), "subscribeX")),
+      mPublisherY(cap::PublisherHelper<Result<Study::DailyNotification, Ng>>::create(mTaskSet, getWaitScopeFunc(),
+                                                                                     "subscribeY")) {
+  Log::print("[server]Server::Server", LOG_FILE);
 }
 
-StudyServer::Server::~Server() { Log::print("[server]Server::~Server"); }
+StudyServer::Server::~Server() { Log::print("[server]Server::~Server", LOG_FILE); }
 
 void StudyServer::Server::cleanup() {
-  Log::print("[server]StudyServer::Server::cleanup start");
+  Log::print("[server]StudyServer::Server::cleanup start", LOG_FILE);
   mPublisherX->stopWorker();
-  Log::print("[server]StudyServer::Server::cleanup mPublisherX stopWorker end");
+  Log::print("[server]StudyServer::Server::cleanup mPublisherX stopWorker end", LOG_FILE);
   mPublisherX.reset();
-  Log::print("[server]StudyServer::Server::cleanup mPublisherX reset end");
+  Log::print("[server]StudyServer::Server::cleanup mPublisherX reset end", LOG_FILE);
   mPublisherY->stopWorker();
-  Log::print("[server]StudyServer::Server::cleanup mPublisherY stopWorker end");
+  Log::print("[server]StudyServer::Server::cleanup mPublisherY stopWorker end", LOG_FILE);
   mPublisherY.reset();
-  Log::print("[server]StudyServer::Server::cleanup mPublisherY reset end");
+  Log::print("[server]StudyServer::Server::cleanup mPublisherY reset end", LOG_FILE);
   if (mTaskSet && mInterface) {
-    Log::print("[server]StudyServer::Server::cleanup wait");
+    Log::print("[server]StudyServer::Server::cleanup wait", LOG_FILE);
     mTaskSet->onEmpty().wait(mInterface->getWaitScope());
-    Log::print("[server]StudyServer::Server::cleanup OK");
+    Log::print("[server]StudyServer::Server::cleanup OK", LOG_FILE);
   }
 }
 
 kj::Promise<void> StudyServer::Server::createUserId(CreateUserIdContext context) {
-  Log::print("[server]createUserId start");
+  Log::print("[server]createUserId start", LOG_FILE);
 
-  return es_util::cap::AsyncHelper::executeAsync(
+  return cap::AsyncHelper::executeAsync(
       [this]() {
         const std::lock_guard<std::mutex> lock(mMutex);
         auto ret = mUserDataList.emplace(mUserDataList.size(), UserData{});
@@ -169,7 +174,7 @@ kj::Promise<void> StudyServer::Server::createUserId(CreateUserIdContext context)
       [context = kj::mv(context)](std::optional<std::optional<UserId>>&& result) mutable {
         if (result && result.value()) {
           context.getResults().initResult().initValue().setId(result.value().value());
-          Log::print("[server]createUserId end. id: " + std::to_string(result.value().value()));
+          Log::print("[server]createUserId end. id: " + std::to_string(result.value().value()), LOG_FILE);
         } else {
           context.getResults().initResult().initError().setMessage("createUserId failed");
         }
@@ -177,16 +182,16 @@ kj::Promise<void> StudyServer::Server::createUserId(CreateUserIdContext context)
 }
 
 kj::Promise<void> StudyServer::Server::deleteUserId(DeleteUserIdContext context) {
-  Log::print("[server]deleteUserId start");
+  Log::print("[server]deleteUserId start", LOG_FILE);
 
   if (!context.getParams().hasUserId()) {
     context.getResults().initResult().initError().setMessage("deleteUserId id is null");
     return kj::READY_NOW;
   }
 
-  Log::print("[server]deleteUserId start. id: " + std::to_string(context.getParams().getUserId().getId()));
+  Log::print("[server]deleteUserId start. id: " + std::to_string(context.getParams().getUserId().getId()), LOG_FILE);
 
-  return es_util::cap::AsyncHelper::executeAsync(
+  return cap::AsyncHelper::executeAsync(
       [this, id = context.getParams().getUserId().getId()]() {
         const std::lock_guard<std::mutex> lock(mMutex);
         if (mUserDataList.count(id) > 0) {
@@ -202,12 +207,12 @@ kj::Promise<void> StudyServer::Server::deleteUserId(DeleteUserIdContext context)
         } else {
           context.getResults().initResult().initError().setMessage("deleteUserId invalid id");
         }
-        Log::print("[server]deleteUserId end");
+        Log::print("[server]deleteUserId end", LOG_FILE);
       });
 }
 
 kj::Promise<void> StudyServer::Server::subscribeX(SubscribeXContext context) {
-  Log::print("[server]subscribeX start");
+  Log::print("[server]subscribeX start", LOG_FILE);
 
   if (!context.getParams().hasCallback()) {
     context.getResults().initResult().initError().setMessage("hasCallback is false");
@@ -230,11 +235,11 @@ kj::Promise<void> StudyServer::Server::subscribeX(SubscribeXContext context) {
     if (!mPublisherX->isWorkerRunning()) {
       auto ret = mPublisherX->setWorker([this](const std::atomic<bool>& stopFlag) {
         while (!stopFlag.load()) {
-          Log::print("[server]subscribeX worker try publish");
+          Log::print("[server]subscribeX worker try publish", LOG_FILE);
           mPublisherX->publish("send X");
-          Log::print("[server]subscribeX worker end publish");
+          Log::print("[server]subscribeX worker end publish", LOG_FILE);
         }
-        Log::print("[server]subscribeX worker thread end");
+        Log::print("[server]subscribeX worker thread end", LOG_FILE);
       });
 
       if (!ret) {
@@ -244,12 +249,12 @@ kj::Promise<void> StudyServer::Server::subscribeX(SubscribeXContext context) {
     }
     context.getResults().initResult().setValue(kj::mv(client));
   }
-  Log::print("[server]subscribeX registered.");
+  Log::print("[server]subscribeX registered.", LOG_FILE);
   return kj::READY_NOW;
 }
 
 kj::Promise<void> StudyServer::Server::subscribeY(SubscribeYContext context) {
-  Log::print("[server]subscribeY start");
+  Log::print("[server]subscribeY start", LOG_FILE);
 
   if (!context.getParams().hasCallback()) {
     context.getResults().initResult().initError().setMessage("hasCallback is false");
@@ -277,11 +282,11 @@ kj::Promise<void> StudyServer::Server::subscribeY(SubscribeYContext context) {
           auto result = resultMessageBuilder.initRoot<Result<Study::DailyNotification, Ng>>();
           result.initValue().initDate().setIso8601("2000-01-01T00:00:00Z");
           result.getValue().setDmy("send Y");
-          Log::print("[server]subscribeY worker try publish");
+          Log::print("[server]subscribeY worker try publish", LOG_FILE);
           mPublisherY->publish(kj::mv(result));
-          Log::print("[server]subscribeY worker end publish");
+          Log::print("[server]subscribeY worker end publish", LOG_FILE);
         }
-        Log::print("[server]subscribeY worker thread end");
+        Log::print("[server]subscribeY worker thread end", LOG_FILE);
       });
 
       if (!ret) {
@@ -291,12 +296,12 @@ kj::Promise<void> StudyServer::Server::subscribeY(SubscribeYContext context) {
     }
     context.getResults().initResult().setValue(kj::mv(client));
   }
-  Log::print("[server]subscribeY registered.");
+  Log::print("[server]subscribeY registered.", LOG_FILE);
   return kj::READY_NOW;
 }
 
 void StudyServer::Server::taskFailed(kj::Exception&& e) {
-  Log::print(std::string("[server]taskFailed: ") + e.getDescription().cStr());
+  Log::print(std::string("[server]taskFailed: ") + e.getDescription().cStr(), LOG_FILE);
 }
 
 std::function<kj::WaitScope&()> StudyServer::Server::getWaitScopeFunc() {
@@ -304,7 +309,7 @@ std::function<kj::WaitScope&()> StudyServer::Server::getWaitScopeFunc() {
   return [interface]() -> kj::WaitScope& {
     const auto ins = interface.lock();
     if (!ins) {
-      Log::printAndThrow("[server error]EzRpcServerInterface is null");
+      Log::printAndThrow("[server error]EzRpcServerInterface is null", LOG_FILE);
     }
     return ins->getWaitScope();
   };
