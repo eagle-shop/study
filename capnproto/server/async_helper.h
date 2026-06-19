@@ -37,16 +37,17 @@ class AsyncHelper {
           } catch (const kj::Exception& e) {
             Log::print(std::string("[AsyncHelper][Async Thread]error kj::Exception: ") + e.getDescription().cStr(),
                        es::LOG_FILE);
-            promiseAndCrossThreadFulfiller->fulfiller->reject(
-                KJ_EXCEPTION(FAILED, "[AsyncHelper][Async Thread]catch kj::Exception"));
+            promiseAndCrossThreadFulfiller->fulfiller->reject(kj::Exception(e));
           } catch (const std::exception& e) {
             Log::print(std::string("[AsyncHelper][Async Thread]error std::exception: ") + e.what(), es::LOG_FILE);
             promiseAndCrossThreadFulfiller->fulfiller->reject(
-                KJ_EXCEPTION(FAILED, "[AsyncHelper][Async Thread]catch std::exception"));
+                kj::Exception(kj::Exception::Type::FAILED, __FILE__, __LINE__,
+                              kj::str("[AsyncHelper][Async Thread]catch std::exception")));
           } catch (...) {
             Log::print("[AsyncHelper][Async Thread]error unknown exception", es::LOG_FILE);
             promiseAndCrossThreadFulfiller->fulfiller->reject(
-                KJ_EXCEPTION(FAILED, "[AsyncHelper][Async Thread]catch unknown exception"));
+                kj::Exception(kj::Exception::Type::FAILED, __FILE__, __LINE__,
+                              kj::str("[AsyncHelper][Async Thread]catch unknown exception")));
           }
         });
         return promiseAndCrossThreadFulfiller->promise
