@@ -126,6 +126,7 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
         Log::print("[server]PublisherHelper::publish try to executeSync (" + mLogName + ")", es::LOG_FILE);
         mExecutor->executeSync([this, value = std::forward<T>(value)]() {
           Log::print("[server]PublisherHelper::publish start executeSync func (" + mLogName + ")", es::LOG_FILE);
+          auto promises = kj::Vector<kj::Promise<void>>();
           for (auto& e : mClient) {
             auto callback = std::make_unique<decltype(e.second->sendRequest())>(e.second->sendRequest());
             if (!callback) {
@@ -133,38 +134,38 @@ class PublisherHelper final : public std::enable_shared_from_this<PublisherHelpe
             }
 
             callback->setValue(value);
-            mTaskCounter++;
-            Log::print("[server]PublisherHelper::publish mTaskSet->add (" + mLogName +
-                           "), mTaskCounter: " + std::to_string(mTaskCounter),
-                       es::LOG_FILE);
-            mTaskSet->add(callback->send()
-                              .then(
-                                  [this]() {
-                                    mTaskCounter--;
-                                    Log::print("[server]PublisherHelper::publish callback.send() OK (" + mLogName +
-                                                   "), mTaskCounter: " + std::to_string(mTaskCounter),
-                                               es::LOG_FILE);
-                                    if (mStopFlag.load() && (mTaskCounter == 0)) {
-                                      if (mCleanupPair.fulfiller) {
-                                        mCleanupPair.fulfiller->fulfill();
-                                      }
-                                    }
-                                  },
-                                  [this](kj::Exception&& e) {
-                                    mTaskCounter--;
-                                    Log::print(
-                                        std::string("[server]PublisherHelper::publish callback.send() Exception: ") +
-                                            e.getDescription().cStr() + " (" + mLogName +
-                                            "), mTaskCounter:" + std::to_string(mTaskCounter),
-                                        es::LOG_FILE);
-                                    if (mStopFlag.load() && (mTaskCounter == 0)) {
-                                      if (mCleanupPair.fulfiller) {
-                                        mCleanupPair.fulfiller->fulfill();
-                                      }
-                                    }
-                                  })
-                              .attach(kj::mv(callback)));
+            promises.add(callback->send().attach(kj::mv(callback)));
           }
+          mTaskCounter++;
+          Log::print("[server]PublisherHelper::publish mTaskSet->add (" + mLogName +
+                         "), mTaskCounter: " + std::to_string(mTaskCounter),
+                     es::LOG_FILE);
+          mTaskSet->add(kj::joinPromises(promises.releaseAsArray())
+                            .then(
+                                [this]() {
+                                  mTaskCounter--;
+                                  Log::print("[server]PublisherHelper::publish all callback.send() OK (" + mLogName +
+                                                 "), mTaskCounter: " + std::to_string(mTaskCounter),
+                                             es::LOG_FILE);
+                                  if (mStopFlag.load() && (mTaskCounter == 0)) {
+                                    if (mCleanupPair.fulfiller) {
+                                      mCleanupPair.fulfiller->fulfill();
+                                    }
+                                  }
+                                },
+                                [this](kj::Exception&& e) {
+                                  mTaskCounter--;
+                                  Log::print(
+                                      std::string("[server]PublisherHelper::publish callback.send() Exception: ") +
+                                          e.getDescription().cStr() + " (" + mLogName +
+                                          "), mTaskCounter:" + std::to_string(mTaskCounter),
+                                      es::LOG_FILE);
+                                  if (mStopFlag.load() && (mTaskCounter == 0)) {
+                                    if (mCleanupPair.fulfiller) {
+                                      mCleanupPair.fulfiller->fulfill();
+                                    }
+                                  }
+                                }));
           Log::print("[server]PublisherHelper::publish end executeSync func (" + mLogName + ")", es::LOG_FILE);
         });
         Log::print("[server]PublisherHelper::publish executeSync end (" + mLogName + ")", es::LOG_FILE);
